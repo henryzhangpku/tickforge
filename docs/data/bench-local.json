@@ -12,127 +12,160 @@
   ],
   "build_type": "release",
   "compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
-  "date": "2026-10-25T15:47:59+00:00"
+  "commit": "",
+  "date": "2026-10-25T16:43:56+00:00"
  },
  "benchmarks": [
   {
    "name": "BM_MmapScanPrices",
-   "real_time": 1619.983852941161,
-   "cpu_time": 1592.9419684873947,
+   "real_time": 1335.2102601806628,
+   "cpu_time": 1302.0095950226244,
    "time_unit": "us",
-   "items_per_second": 627769259.5101672,
-   "bytes_per_second": 5022154076.081338
+   "items_per_second": 768043495.088547,
+   "bytes_per_second": 6144347960.708376
   },
   {
    "name": "BM_ScratchNewDelete",
-   "real_time": 195.83462557518718,
-   "cpu_time": 195.00867840308675,
+   "real_time": 223.99652947542185,
+   "cpu_time": 212.2774288296322,
    "time_unit": "ns",
    "items_per_second": null,
    "bytes_per_second": null
   },
   {
    "name": "BM_ScratchArena",
-   "real_time": 131.45242440780478,
-   "cpu_time": 129.96771276160973,
+   "real_time": 128.00421758889934,
+   "cpu_time": 126.01870651640364,
    "time_unit": "ns",
    "items_per_second": null,
    "bytes_per_second": null
   },
   {
    "name": "BM_SpscRingTransfer/real_time",
-   "real_time": 19.558888222219494,
-   "cpu_time": 19.282836388888896,
+   "real_time": 54.97359836363103,
+   "cpu_time": 53.130831909090894,
    "time_unit": "ms",
-   "items_per_second": 53611227.18666523,
+   "items_per_second": 19074174.353005573,
    "bytes_per_second": null
   },
   {
    "name": "BM_FeaturesCrtp",
-   "real_time": 23.190992000003273,
-   "cpu_time": 22.66865048275862,
+   "real_time": 22.083809681817,
+   "cpu_time": 21.84810368181819,
    "time_unit": "ms",
-   "items_per_second": 44113786.16299116,
+   "items_per_second": 45770562.725413635,
    "bytes_per_second": null
   },
   {
    "name": "BM_FeaturesVirtual",
-   "real_time": 27.80853560869653,
-   "cpu_time": 27.73125995652172,
+   "real_time": 32.59364710526681,
+   "cpu_time": 31.830357578947382,
    "time_unit": "ms",
-   "items_per_second": 36060388.22497945,
+   "items_per_second": 31416549.359200437,
    "bytes_per_second": null
   },
   {
    "name": "BM_BacktestCrtp",
-   "real_time": 49.07447657142581,
-   "cpu_time": 48.670884285714294,
+   "real_time": 40.89488457144138,
+   "cpu_time": 40.81024657142856,
    "time_unit": "ms",
-   "items_per_second": 20546164.60489329,
+   "items_per_second": 24503650.0392062,
    "bytes_per_second": null
   },
   {
    "name": "BM_BacktestVirtual",
-   "real_time": 47.23030942857674,
-   "cpu_time": 47.206124285714246,
+   "real_time": 43.93411857142837,
+   "cpu_time": 41.687185071428566,
    "time_unit": "ms",
-   "items_per_second": 21183692.05545275,
+   "items_per_second": 23988187.215964768,
    "bytes_per_second": null
   },
   {
    "name": "BM_BacktestPipelined/real_time",
-   "real_time": 51.02568190000056,
-   "cpu_time": 50.15284780000009,
+   "real_time": 43.83061060000273,
+   "cpu_time": 41.94146820000002,
    "time_unit": "ms",
-   "items_per_second": 19597974.25068785,
+   "items_per_second": 22815105.386643592,
    "bytes_per_second": null
   },
   {
    "name": "BM_Sweep/threads:1/real_time",
-   "real_time": 1497.5170600000638,
-   "cpu_time": 1.5390489999997925,
+   "real_time": 1473.311011000078,
+   "cpu_time": 0.1878579999994301,
    "time_unit": "ms",
-   "items_per_second": 21368704.80794298,
+   "items_per_second": 21719786.08798866,
    "bytes_per_second": null
   },
   {
    "name": "BM_Sweep/threads:2/real_time",
-   "real_time": 867.3765359999379,
-   "cpu_time": 1.4648680000011183,
+   "real_time": 724.5239280000533,
+   "cpu_time": 0.31811100000034287,
    "time_unit": "ms",
-   "items_per_second": 36892858.72035889,
+   "items_per_second": 44166933.29691887,
    "bytes_per_second": null
   },
   {
    "name": "BM_Sweep/threads:3/real_time",
-   "real_time": 530.280115999858,
-   "cpu_time": 2.183321999998711,
+   "real_time": 495.22565999996004,
+   "cpu_time": 0.4332639999997667,
    "time_unit": "ms",
-   "items_per_second": 60345464.66005632,
+   "items_per_second": 64617007.12358601,
    "bytes_per_second": null
   },
   {
    "name": "BM_Sweep/threads:4/real_time",
-   "real_time": 435.7241509999312,
-   "cpu_time": 1.10894100000003,
+   "real_time": 413.3242450000125,
+   "cpu_time": 0.4413519999997284,
    "time_unit": "ms",
-   "items_per_second": 73440960.12709898,
+   "items_per_second": 77421057.16541992,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_PoolTreeCentral/threads:4/real_time",
+   "real_time": 30.81443416666237,
+   "cpu_time": 0.07720922222221994,
+   "time_unit": "ms",
+   "items_per_second": 1063397.7512866734,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_PoolTreeStealing/threads:4/real_time",
+   "real_time": 16.051213117648064,
+   "cpu_time": 0.22724985294117647,
+   "time_unit": "ms",
+   "items_per_second": 2041465.6362622266,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_SweepCentral/real_time",
+   "real_time": 401.6989729998386,
+   "cpu_time": 1.1866979999997085,
+   "time_unit": "ms",
+   "items_per_second": 79661642.55045994,
    "bytes_per_second": null
   },
   {
    "name": "BM_BatchFeaturesCpu/symbols:64",
-   "real_time": 4.641929824468333,
-   "cpu_time": 4.473595196808508,
+   "real_time": 3.8640029117646812,
+   "cpu_time": 3.8221039235294083,
    "time_unit": "ms",
-   "items_per_second": 58598060.05402887,
+   "items_per_second": 68586308.80918877,
    "bytes_per_second": null
   },
   {
    "name": "BM_BatchFeaturesCpu/symbols:512",
-   "real_time": 30.339384850003626,
-   "cpu_time": 29.74465544999996,
+   "real_time": 29.275403523808478,
+   "cpu_time": 28.61626290476187,
    "time_unit": "ms",
-   "items_per_second": 70505170.36666508,
+   "items_per_second": 73285320.55284636,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_BatchFeaturesCpu/symbols:4096",
+   "real_time": 276.47592649998387,
+   "cpu_time": 274.93649799999974,
+   "time_unit": "ms",
+   "items_per_second": 61022149.194611534,
    "bytes_per_second": null
   }
  ]

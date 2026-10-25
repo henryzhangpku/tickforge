@@ -9,10 +9,12 @@
 #include <bit>
 #include <cerrno>
 #include <charconv>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <stdexcept>
 #include <system_error>
+#include <type_traits>
 #include <utility>
 
 #include "tickforge/memory.hpp"
@@ -209,13 +211,25 @@ std::vector<std::string_view> split(std::string_view line) {
   return out;
 }
 
+[[noreturn]] void bad_field(std::string_view f, std::size_t line_no, std::string_view name) {
+  throw std::runtime_error("CSV line " + std::to_string(line_no) + ": bad " + std::string(name) + " '" +
+                           std::string(f) + "'");
+}
+
 template <class T>
 T parse(std::string_view f, std::size_t line_no, std::string_view name) {
   T v{};
-  const auto [ptr, ec] = std::from_chars(f.data(), f.data() + f.size(), v);
-  if (ec != std::errc{} || ptr != f.data() + f.size())
-    throw std::runtime_error("CSV line " + std::to_string(line_no) + ": bad " + std::string(name) + " '" +
-                             std::string(f) + "'");
+  if constexpr (std::is_floating_point_v<T>) {
+    // strtod rather than from_chars: libc++ only gained floating-point
+    // from_chars in version 20 (macOS, Emscripten).
+    const std::string tmp(f);
+    char* end = nullptr;
+    v = static_cast<T>(std::strtod(tmp.c_str(), &end));
+    if (tmp.empty() || end != tmp.c_str() + tmp.size()) bad_field(f, line_no, name);
+  } else {
+    const auto [ptr, ec] = std::from_chars(f.data(), f.data() + f.size(), v);
+    if (ec != std::errc{} || ptr != f.data() + f.size()) bad_field(f, line_no, name);
+  }
   return v;
 }
 

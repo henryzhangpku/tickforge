@@ -27,7 +27,21 @@ jobs:
       - name: Build (Release)
         run: |
           cmake --preset release -DTICKFORGE_BUILD_TESTS=OFF
-          cmake --build --preset release --target tickforge_bench
+          cmake --build --preset release --target tickforge_bench tickforge_cli
+      - name: Build the browser engine (C++ -> WebAssembly)
+        run: |
+          git clone -q --depth 1 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 3.1.74 > /dev/null
+          "$RUNNER_TEMP/emsdk/emsdk" activate 3.1.74 > /dev/null
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          ./scripts/build_wasm.sh
+      - name: Check the WebAssembly engine matches the native build
+        run: |
+          ./build/release/tickforge_cli gen "$RUNNER_TEMP/t.tf" 200000 7 > /dev/null
+          native=$(./build/release/tickforge_cli backtest "$RUNNER_TEMP/t.tf" | head -1 | sed 's/ .*//')
+          wasm=$(node -e "require('./docs/wasm/tickforge.js')().then(M=>{M._tf_generate(200000,7);const p=M._tf_backtest(500,1.0,0.25,0.0005,0.1,0,1);console.log('pnl='+new Float64Array(M.HEAPF64.buffer,p,1)[0].toFixed(2))})")
+          echo "native: $native  wasm: $wasm"
+          test "$native" = "$wasm"
       - name: Run benchmarks
         run: |
           ./build/release/tickforge_bench --benchmark_min_time=0.5s \

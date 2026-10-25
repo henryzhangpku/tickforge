@@ -29,6 +29,7 @@ add_library(tickforge_core STATIC
   src/tick_store.cpp
   src/synth.cpp
   src/backtest.cpp
+  src/pipeline.cpp
   src/thread_pool.cpp
   src/work_stealing_pool.cpp
   src/sweep.cpp

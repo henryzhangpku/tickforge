@@ -111,6 +111,9 @@ class BasicBacktester {
     }
   }
 
+  // Current position in shares (for callers that record fills or plot them).
+  std::int64_t position() const noexcept { return position_; }
+
   BacktestResult finish() const noexcept {
     BacktestResult r = r_;
     r.pnl = cash_ + static_cast<double>(position_) * last_mid_;
