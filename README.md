@@ -86,6 +86,8 @@ From the committed run on a 4-vCPU cloud dev container (Intel Xeon @ 2.8 GHz, gc
 | Scratch allocation, arena vs `new`/`delete` (3 × 4 KB vectors) | 131 ns vs 196 ns |
 | Batch features on CPU, 512 symbols × 4096 ticks | ~70 M cells/s |
 
+On the GitHub Actions runner (AMD EPYC 7763, 4 vCPU) the same suite gives ~32 M ticks/s per backtest (CRTP, virtual plugin and pipelined all within 1%), 156 M items/s through the ring, and a sweep speed-up of 1.97× on 2 threads but only 2.4× on 4: those 4 vCPUs are 2 physical cores with SMT (L1/L2 shared ×2 in the cache topology), and two hyperthreads running the same compute-bound loop mostly share one core's execution units.
+
 Correctness checks worth pointing at:
 
 - `tests/test_no_alloc.cpp` — zero calls to `operator new` while 200k ticks go through a constructed backtester.

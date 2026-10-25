@@ -279,7 +279,7 @@ res["sharpe"].argmax(), res["pnl"].dtype   # NumPy arrays, one row per grid poin
     el("polyline", { points: pts, fill: "none", stroke: "var(--ideal)", "stroke-width": 2, "stroke-dasharray": "5 4" }, svg);
     el("line", { x1: L, x2: W - R, y1: y(0), y2: y(0), stroke: "var(--ink-3)", "stroke-width": 1 }, svg);
     const last = runs[runs.length - 1];
-    cap.textContent = `${maxT} threads: ${fmt(last.s, 2)}× faster than 1 thread (${fmt(100 * last.s / last.t, 0)}% parallel efficiency); ${fmt(last.ms, 0)} ms for 32 million-tick backtests. Results are bit-identical at every thread count.`;
+    cap.textContent = `${maxT} threads: ${fmt(last.s, 2)}× faster than 1 thread (${fmt(100 * last.s / last.t, 0)}% parallel efficiency); ${fmt(last.ms, 0)} ms for 32 million-tick backtests. Results are bit-identical at every thread count. Where logical CPUs are SMT siblings, scaling past the physical core count flattens: two hyperthreads share one core's execution units.`;
   }
 
   const PAIRS = [
