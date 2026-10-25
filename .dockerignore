@@ -1,0 +1,4 @@
+build/
+.git/
+*.tf
+__pycache__/

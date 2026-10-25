@@ -31,6 +31,7 @@ add_library(tickforge_core STATIC
   src/backtest.cpp
   src/thread_pool.cpp
   src/sweep.cpp
+  src/plugins.cpp
   src/batch_features.cpp)
 add_library(tickforge::core ALIAS tickforge_core)
 target_include_directories(tickforge_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)

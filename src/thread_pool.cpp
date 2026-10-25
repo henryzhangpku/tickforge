@@ -8,7 +8,7 @@ ThreadPool::ThreadPool(std::size_t threads) {
   if (threads == 0) threads = std::max(1U, std::thread::hardware_concurrency());
   workers_.reserve(threads);
   for (std::size_t i = 0; i < threads; ++i)
-    workers_.emplace_back([this](std::stop_token st) { worker_loop(st); });
+    workers_.emplace_back([this](const std::stop_token& st) { worker_loop(st); });
 }
 
 ThreadPool::~ThreadPool() {
@@ -18,7 +18,7 @@ ThreadPool::~ThreadPool() {
   // every future handed out is satisfied.
 }
 
-void ThreadPool::worker_loop(std::stop_token st) {
+void ThreadPool::worker_loop(const std::stop_token& st) {
   for (;;) {
     std::function<void()> job;
     {

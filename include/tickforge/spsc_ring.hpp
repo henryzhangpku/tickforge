@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <optional>
 #include <type_traits>
+#include <utility>
 
 #include "tickforge/memory.hpp"
 
@@ -52,6 +53,23 @@ class SpscRing {
     return true;
   }
 
+  // Consumer side, batched: hands every available slot (up to `max`) to `f`,
+  // then frees them all with one release store. One acquire + one release per
+  // batch instead of per item cuts the cache-line traffic between the cores.
+  template <class F>
+  std::size_t consume(F&& f, std::size_t max = Capacity) noexcept(noexcept(f(std::declval<const T&>()))) {
+    const std::size_t head = head_.load(std::memory_order_relaxed);
+    if (head == tail_cache_) {
+      tail_cache_ = tail_.load(std::memory_order_acquire);
+      if (head == tail_cache_) return 0;
+    }
+    const std::size_t avail = tail_cache_ - head;
+    const std::size_t n = avail < max ? avail : max;
+    for (std::size_t i = 0; i < n; ++i) f(slots_[(head + i) & kMask]);
+    head_.store(head + n, std::memory_order_release);
+    return n;
+  }
+
   std::optional<T> try_pop() noexcept {
     T v;
     if (try_pop(v)) return v;
@@ -65,7 +83,7 @@ class SpscRing {
   alignas(kCacheLine) std::size_t tail_cache_ = 0;         // consumer's view of tail_
   alignas(kCacheLine) std::atomic<std::size_t> tail_{0};  // written by producer
   alignas(kCacheLine) std::size_t head_cache_ = 0;         // producer's view of head_
-  alignas(kCacheLine) T slots_[Capacity];
+  alignas(kCacheLine) T slots_[Capacity]{};
 };
 
 }  // namespace tickforge

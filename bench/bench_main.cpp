@@ -17,6 +17,7 @@
 #include "tickforge/batch_features.hpp"
 #include "tickforge/features.hpp"
 #include "tickforge/memory.hpp"
+#include "tickforge/plugins.hpp"
 #include "tickforge/spsc_ring.hpp"
 #include "tickforge/sweep.hpp"
 #include "tickforge/synth.hpp"
@@ -159,8 +160,9 @@ void BM_BacktestVirtual(benchmark::State& state) {
   const auto p = default_params();
   for (auto _ : state) {
     tf::Arena arena(tf::backtest_scratch_bytes(p));
-    tf::VirtualMeanReversion plugin(p.strategy);
-    tf::BasicBacktester<tf::VirtualStrategyRef> bt(p, tf::VirtualStrategyRef(plugin), arena.resource());
+    // Created by name through the registry in another TU: a genuinely opaque call.
+    const auto plugin = tf::make_strategy("mean_reversion", p.strategy);
+    tf::BasicBacktester<tf::VirtualStrategyRef> bt(p, tf::VirtualStrategyRef(*plugin), arena.resource());
     for (std::size_t i = 0; i < cols.size_ticks(); ++i) bt.on_tick(cols[i]);
     benchmark::DoNotOptimize(bt.finish());
   }

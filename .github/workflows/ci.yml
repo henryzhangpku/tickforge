@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: build + test (${{ matrix.compiler }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - compiler: gcc
+            cc: gcc-13
+            cxx: g++-13
+          - compiler: clang
+            cc: clang-18
+            cxx: clang++-18
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build
+          python -m pip install --quiet numpy
+      - name: Configure (Release + Python module)
+        run: cmake --preset release -DTICKFORGE_PYTHON=ON -DTICKFORGE_BUILD_BENCH=OFF -DPython_EXECUTABLE="$(which python)"
+      - name: Build
+        run: cmake --build --preset release
+      - name: Unit tests
+        run: ctest --preset release
+      - name: Python tests
+        run: PYTHONPATH=build/release python -m unittest discover -v python/tests
+      - name: Python example
+        run: PYTHONPATH=build/release python python/examples/research_example.py
+      - name: CLI smoke test
+        run: |
+          ./build/release/tickforge_cli gen "$RUNNER_TEMP/ticks.tf" 1000000 42
+          ./build/release/tickforge_cli backtest "$RUNNER_TEMP/ticks.tf"
+          ./build/release/tickforge_cli pipeline "$RUNNER_TEMP/ticks.tf"
+          ./build/release/tickforge_cli sweep "$RUNNER_TEMP/ticks.tf" | tail -3
+
+  sanitizers:
+    name: sanitizer (${{ matrix.preset }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [asan, tsan]
+    env:
+      CC: clang-18
+      CXX: clang++-18
+      ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+      TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build
+      # Recent runner kernels use 32 bits of mmap randomisation, which
+      # ThreadSanitizer's fixed shadow layout cannot handle.
+      - name: Reduce ASLR entropy for TSan
+        if: matrix.preset == 'tsan'
+        run: sudo sysctl -w vm.mmap_rnd_bits=28
+      - run: cmake --preset ${{ matrix.preset }}
+      - run: cmake --build --preset ${{ matrix.preset }}
+      - run: ctest --preset ${{ matrix.preset }}
+
+  clang-tidy:
+    runs-on: ubuntu-24.04
+    env:
+      CC: clang-18
+      CXX: clang++-18
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build clang-tidy-18
+      - name: Configure (for compile_commands.json)
+        run: cmake --preset debug -DTICKFORGE_BUILD_TESTS=OFF
+      - name: clang-tidy
+        run: clang-tidy-18 -p build/debug --quiet src/*.cpp apps/*.cpp
+
+  benchmarks:
+    name: release build + benchmarks
+    runs-on: ubuntu-24.04
+    env:
+      CC: gcc-13
+      CXX: g++-13
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install tools
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build
+      - run: cmake --preset release
+      - run: cmake --build --preset release
+      - name: Run benchmarks
+        run: |
+          ./build/release/tickforge_bench --benchmark_min_time=0.3s \
+            --benchmark_out=bench.json --benchmark_out_format=json
+          python3 scripts/bench_to_site.py bench.json bench-site.json \
+            --label "GitHub Actions ubuntu-24.04 runner" --compiler "$($CXX --version | head -1)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks
+          path: |
+            bench.json
+            bench-site.json
+
+  docker:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t tickforge:ci .
+      - name: Run image
+        run: docker run --rm tickforge:ci

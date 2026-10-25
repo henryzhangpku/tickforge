@@ -44,7 +44,7 @@ class ThreadPool {
   }
 
  private:
-  void worker_loop(std::stop_token st);
+  void worker_loop(const std::stop_token& st);
 
   std::mutex mu_;
   std::condition_variable_any cv_;

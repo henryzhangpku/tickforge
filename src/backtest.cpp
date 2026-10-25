@@ -44,16 +44,14 @@ BacktestResult run_backtest_pipelined(const TickColumns& cols, const BacktestPar
 
   Arena arena(backtest_scratch_bytes(p));
   Backtester bt(p, MeanReversion(p.strategy), arena.resource());
-  Tick t{};
+  const auto feed = [&bt](const Tick& t) noexcept { bt.on_tick(t); };
   for (;;) {
-    if (ring->try_pop(t)) {
-      bt.on_tick(t);
-      continue;
-    }
+    if (ring->consume(feed) > 0) continue;
     // Empty. Only stop once the producer has finished *and* the ring is still
     // empty after seeing that: the acquire on `done` orders the final pushes.
     if (done.load(std::memory_order_acquire)) {
-      while (ring->try_pop(t)) bt.on_tick(t);
+      while (ring->consume(feed) > 0) {
+      }
       break;
     }
     std::this_thread::yield();

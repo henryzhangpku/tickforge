@@ -55,3 +55,33 @@ TEST(SpscRing, ConcurrentProducerConsumerPreservesOrder) {
   producer.join();
   EXPECT_EQ(sum, kN * (kN - 1) / 2);
 }
+
+TEST(SpscRing, BatchedConsumeAcrossThreads) {
+  constexpr std::uint64_t kN = 200'000;
+  auto r = std::make_unique<SpscRing<std::uint64_t, 256>>();
+  std::thread producer([&] {
+    for (std::uint64_t i = 0; i < kN; ++i)
+      while (!r->try_push(i)) std::this_thread::yield();
+  });
+  std::uint64_t expected = 0;
+  bool in_order = true;
+  while (expected < kN) {
+    const auto n = r->consume([&](std::uint64_t v) {
+      in_order = in_order && v == expected;
+      ++expected;
+    });
+    if (n == 0) std::this_thread::yield();
+  }
+  producer.join();
+  EXPECT_TRUE(in_order);
+  EXPECT_EQ(r->consume([](std::uint64_t) {}), 0U);
+}
+
+TEST(SpscRing, ConsumeRespectsMax) {
+  auto r = std::make_unique<SpscRing<int, 16>>();
+  for (int i = 0; i < 10; ++i) ASSERT_TRUE(r->try_push(i));
+  int seen = 0;
+  EXPECT_EQ(r->consume([&](int) { ++seen; }, 4), 4U);
+  EXPECT_EQ(r->consume([&](int) { ++seen; }), 6U);
+  EXPECT_EQ(seen, 10);
+}

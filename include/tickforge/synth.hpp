@@ -24,7 +24,7 @@ class Xoshiro256 {
   double normal() noexcept;   // N(0, 1), Box-Muller
 
  private:
-  std::uint64_t s_[4];
+  std::uint64_t s_[4]{};
   double spare_ = 0.0;
   bool has_spare_ = false;
 };

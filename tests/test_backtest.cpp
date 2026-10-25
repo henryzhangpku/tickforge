@@ -1,11 +1,13 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <algorithm>
 #include <cstdlib>
 #include <vector>
 
 #include "fixtures.hpp"
 #include "tickforge/backtest.hpp"
+#include "tickforge/plugins.hpp"
 
 using namespace tickforge;
 
@@ -86,4 +88,34 @@ TEST(Backtest, RejectsWrongEquityLength) {
   const auto t = test::small_ticks(100);
   std::vector<double> equity(5);
   EXPECT_THROW(run_backtest(t.view(), fast_params(), nullptr, equity), std::invalid_argument);
+}
+
+TEST(Plugins, RegistryCreatesByName) {
+  const auto t = test::small_ticks(30'000);
+  const auto p = fast_params();
+  auto plugin = make_strategy("mean_reversion", p.strategy);
+  ASSERT_NE(plugin, nullptr);
+  BasicBacktester<VirtualStrategyRef> bt(p, VirtualStrategyRef(*plugin), std::pmr::new_delete_resource());
+  for (std::size_t i = 0; i < t.price.size(); ++i) bt.on_tick(t.view()[i]);
+  EXPECT_EQ(bt.finish(), run_backtest(t.view(), p));
+  EXPECT_EQ(make_strategy("no_such_strategy", p.strategy), nullptr);
+}
+
+TEST(Plugins, CustomStrategyRegisters) {
+  struct AlwaysLong final : IStrategy {
+    int on_tick(const Tick&, const Features&, int) noexcept override { return 1; }
+  };
+  EXPECT_TRUE(register_strategy("always_long", [](const StrategyParams&) { return std::make_unique<AlwaysLong>(); }));
+  EXPECT_FALSE(register_strategy("always_long", [](const StrategyParams&) { return std::make_unique<AlwaysLong>(); }));
+  const auto names = strategy_names();
+  EXPECT_NE(std::find(names.begin(), names.end(), "always_long"), names.end());
+
+  const auto t = test::small_ticks(1000);
+  const auto p = fast_params();
+  auto s = make_strategy("always_long", p.strategy);
+  BasicBacktester<VirtualStrategyRef> bt(p, VirtualStrategyRef(*s), std::pmr::new_delete_resource());
+  for (std::size_t i = 0; i < t.price.size(); ++i) bt.on_tick(t.view()[i]);
+  const auto r = bt.finish();
+  EXPECT_EQ(r.trades, 1U);
+  EXPECT_EQ(r.final_position, p.exec.lot_size);
 }
