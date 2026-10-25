@@ -1,0 +1,5 @@
+build/
+*.tf
+__pycache__/
+*.so
+.venv/
