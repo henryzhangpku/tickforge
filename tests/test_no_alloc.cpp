@@ -73,7 +73,7 @@ TEST(NoAlloc, HotLoopAllocatesNothing) {
   const auto t = test::small_ticks(200'000);
   BacktestParams p;
   p.strategy.window = 300;
-  p.strategy.entry_z = 1.5;
+  p.strategy.entry_z = 0.5;
 
   // The arena's upstream is null: if the backtester ever outgrew its
   // pre-sized scratch, allocation would throw instead of silently using malloc.

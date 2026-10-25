@@ -1,7 +1,7 @@
 // A deliberately simple mean-reversion toy. It exists to give the engine
 // something realistic-shaped to run, not to make money.
 //
-// Signal: z = log(price / vwap) / (vol * sqrt(window)), i.e. the deviation from
+// Signal: z = log(mid / vwap) / (vol * sqrt(window)), i.e. the deviation from
 // the rolling VWAP in units of the volatility you would expect over the window.
 // Go short when z > entry_z, long when z < -entry_z, flat when |z| < exit_z.
 // Order-flow filter: skip a new entry if trade flow is strongly against it
@@ -38,7 +38,7 @@ class MeanReversion : public StrategyBase<MeanReversion> {
 
   int decide(const Tick& t, const Features& f, int current) const noexcept {
     if (!f.warm || f.vol <= 0.0 || f.vwap <= 0.0) return current;
-    const double z = std::log(t.price / f.vwap) / (f.vol * scale_);
+    const double z = std::log(t.mid() / f.vwap) / (f.vol * scale_);
     if (current == 0) {
       const bool no_filter = p_.ofi_max >= 1.0;
       if (z > p_.entry_z && (no_filter || f.ofi < p_.ofi_max)) return -1;   // rich, buyers not stampeding

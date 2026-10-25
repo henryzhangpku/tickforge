@@ -1,0 +1,38 @@
+# Google Cloud Run Jobs: the same sweep, sharded by CLOUD_RUN_TASK_INDEX /
+# CLOUD_RUN_TASK_COUNT (set by Cloud Run for every task).
+#
+#   # Cloud Run pulls from Artifact Registry; mirror the GHCR image there first:
+#   gcloud artifacts repositories create tickforge --repository-format=docker --location=us-central1
+#   docker pull ghcr.io/henryzhangpku/tickforge:latest
+#   docker tag  ghcr.io/henryzhangpku/tickforge:latest us-central1-docker.pkg.dev/PROJECT/tickforge/tickforge:latest
+#   docker push us-central1-docker.pkg.dev/PROJECT/tickforge/tickforge:latest
+#   # then edit `image` below and:
+#   gcloud run jobs replace deploy/cloudrun/job.yaml --region us-central1
+#   gcloud run jobs execute tickforge-sweep --region us-central1 --wait
+#   gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name="tickforge-sweep"' \
+#     --format='value(textPayload)' > shards.txt && python3 scripts/merge_shards.py shards.txt
+#
+# Not executed by CI (needs a GCP project); the Kubernetes job exercises the
+# same image and the same sharding contract.
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: tickforge-sweep
+spec:
+  template:
+    spec:
+      taskCount: 4
+      parallelism: 4
+      template:
+        spec:
+          maxRetries: 0
+          timeoutSeconds: 900
+          containers:
+            - image: us-central1-docker.pkg.dev/PROJECT/tickforge/tickforge:latest
+              command: ["sh", "-c"]
+              args:
+                - >-
+                  tickforge_cli gen-universe /tmp/universe 4 300000 42 >&2 &&
+                  tickforge_cli sweep /tmp/universe --csv --shard-from-env --threads 1
+              resources:
+                limits: { cpu: "1", memory: "512Mi" }

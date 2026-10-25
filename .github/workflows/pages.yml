@@ -21,7 +21,7 @@ jobs:
       CC: gcc-13
       CXX: g++-13
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Install tools
         run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build
       - name: Build (Release)
@@ -33,7 +33,7 @@ jobs:
           ./build/release/tickforge_bench --benchmark_min_time=0.5s \
             --benchmark_out=bench.json --benchmark_out_format=json
           python3 scripts/bench_to_site.py bench.json docs/data/bench-ci.json \
-            --label "GitHub Actions ubuntu-24.04 runner" --compiler "$($CXX --version | head -1)"
+            --label "GitHub Actions ubuntu-24.04 runner" --compiler "$($CXX --version | head -1)" --commit "$GITHUB_SHA"
       - name: Publish docs/ to gh-pages
         run: |
           cd docs
@@ -44,3 +44,15 @@ jobs:
           git add -A
           git commit -q -m "Publish site from ${GITHUB_SHA::7}"
           git push -q --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+      # Fail the workflow unless the live site serves this commit's data.
+      - name: Verify the live site
+        run: |
+          url="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
+          for i in $(seq 1 60); do
+            if curl -fsS "$url/data/bench-ci.json?nocache=$i" | grep -q "\"commit\": \"$GITHUB_SHA\""; then
+              curl -fsS -o /dev/null -w "index.html: HTTP %{http_code}\n" "$url/"
+              echo "live: $url serves $GITHUB_SHA"; exit 0
+            fi
+            sleep 10
+          done
+          echo "site did not update within 10 minutes"; exit 1

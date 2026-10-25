@@ -5,12 +5,16 @@
 // defined, so libstdc++ and libc++ would produce different files from the same
 // seed. Here the same seed gives byte-identical output everywhere.
 //
-// The price is an Ornstein-Uhlenbeck deviation around a slow random-walk
-// anchor, so a mean-reversion toy has something to find. It is not a model of
-// any real market.
+// Fair value is an Ornstein-Uhlenbeck deviation around a slow random-walk
+// anchor, so a mean-reversion toy has something to find. A 1-3 tick quote sits
+// around it, and each trade prints at the bid or ask it hit, so trade prices
+// carry bid-ask bounce like real prints do. It is not a model of any real market.
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <vector>
 
 #include "tickforge/tick_store.hpp"
 
@@ -36,11 +40,16 @@ struct SynthParams {
   double tick_size = 0.01;
   double anchor_vol = 0.00002;   // per-tick log vol of the slow anchor
   double ou_kappa = 0.002;       // mean-reversion speed of the deviation
-  double ou_vol = 0.0004;        // per-tick log vol of the deviation
-  double mean_gap_ns = 50'000;   // average inter-arrival, exponential
+  double ou_vol = 0.00012;       // per-tick log vol of the deviation
+  double mean_gap_ns = 23'400'000;  // average inter-arrival: 1M ticks ~ one 6.5h session
   std::int64_t start_ts = 1'700'000'000'000'000'000;
 };
 
 TickVectors generate_ticks(const SynthParams& p);
+
+// Writes `n_symbols` files SYN000.tf, SYN001.tf, ... into `dir`, each with its
+// own seed, starting price and volatility. Returns the paths in order.
+std::vector<std::filesystem::path> generate_universe(const std::filesystem::path& dir, std::size_t n_symbols,
+                                                     const SynthParams& base);
 
 }  // namespace tickforge

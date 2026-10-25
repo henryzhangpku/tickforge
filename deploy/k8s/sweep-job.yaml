@@ -1,0 +1,52 @@
+# Distributed parameter sweep as a Kubernetes Indexed Job.
+#
+# Each pod gets JOB_COMPLETION_INDEX (0..completions-1) from Kubernetes; the
+# CLI turns that plus TICKFORGE_SHARDS into its slice of the task list, so the
+# same image runs unchanged on any number of nodes. The universe is generated
+# deterministically in every pod (same seed, same bytes), so no shared storage
+# is needed for this demo; with real data you would mount a volume or read
+# from object storage instead. Each pod prints CSV rows; collect them with
+# `kubectl logs` and merge with scripts/merge_shards.py.
+#
+# CI deploys this to a kind cluster and checks that the merged result is
+# byte-identical to a single-machine run (.github/workflows/ci.yml, job "kubernetes").
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tickforge-sweep
+  labels:
+    app: tickforge
+spec:
+  completionMode: Indexed
+  completions: 4
+  parallelism: 4
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: tickforge
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+      containers:
+        - name: sweep
+          image: ghcr.io/henryzhangpku/tickforge:latest
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c"]
+          args:
+            - >-
+              tickforge_cli gen-universe /data/universe 4 300000 42 >&2 &&
+              tickforge_cli sweep /data/universe --csv --shard-from-env --threads 1
+          env:
+            - name: TICKFORGE_SHARDS
+              value: "4"
+          resources:
+            requests: { cpu: "250m", memory: "256Mi" }
+            limits: { cpu: "1", memory: "512Mi" }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+      volumes:
+        - name: data
+          emptyDir: {}

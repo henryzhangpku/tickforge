@@ -66,6 +66,7 @@
     { "name": "release", "inherits": "base", "configurePreset": "release" },
     { "name": "debug", "inherits": "base", "configurePreset": "debug" },
     { "name": "asan", "inherits": "base", "configurePreset": "asan" },
-    { "name": "tsan", "inherits": "base", "configurePreset": "tsan" }
+    { "name": "tsan", "inherits": "base", "configurePreset": "tsan" },
+    { "name": "cuda", "inherits": "base", "configurePreset": "cuda" }
   ]
 }

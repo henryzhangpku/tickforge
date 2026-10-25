@@ -1,0 +1,16 @@
+{
+  "jobDefinitionName": "tickforge-sweep",
+  "type": "container",
+  "platformCapabilities": ["FARGATE"],
+  "containerProperties": {
+    "image": "ghcr.io/henryzhangpku/tickforge:latest",
+    "command": ["sh", "-c", "tickforge_cli gen-universe /tmp/universe 4 300000 42 >&2 && tickforge_cli sweep /tmp/universe --csv --shard-from-env --threads 1"],
+    "environment": [{ "name": "TICKFORGE_SHARDS", "value": "4" }],
+    "resourceRequirements": [
+      { "type": "VCPU", "value": "1" },
+      { "type": "MEMORY", "value": "2048" }
+    ],
+    "networkConfiguration": { "assignPublicIp": "ENABLED" },
+    "executionRoleArn": "arn:aws:iam::ACCOUNT:role/ecsTaskExecutionRole"
+  }
+}

@@ -31,7 +31,7 @@ jobs:
       CC: ${{ matrix.cc }}
       CXX: ${{ matrix.cxx }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
@@ -50,12 +50,19 @@ jobs:
         run: PYTHONPATH=build/release python -m unittest discover -v python/tests
       - name: Python example
         run: PYTHONPATH=build/release python python/examples/research_example.py
-      - name: CLI smoke test
+      - name: CLI smoke test (single file, universe, CSV import, shards)
         run: |
-          ./build/release/tickforge_cli gen "$RUNNER_TEMP/ticks.tf" 1000000 42
-          ./build/release/tickforge_cli backtest "$RUNNER_TEMP/ticks.tf"
-          ./build/release/tickforge_cli pipeline "$RUNNER_TEMP/ticks.tf"
-          ./build/release/tickforge_cli sweep "$RUNNER_TEMP/ticks.tf" | tail -3
+          B=./build/release/tickforge_cli
+          $B gen "$RUNNER_TEMP/ticks.tf" 1000000 42
+          $B backtest "$RUNNER_TEMP/ticks.tf"
+          $B pipeline "$RUNNER_TEMP/ticks.tf"
+          $B gen-universe "$RUNNER_TEMP/u" 3 200000 7
+          $B sweep "$RUNNER_TEMP/u" | tail -2
+          $B sweep "$RUNNER_TEMP/u" --csv > "$RUNNER_TEMP/full.csv"
+          for k in 0 1 2; do $B sweep "$RUNNER_TEMP/u" --csv --pool central --shard $k/3 > "$RUNNER_TEMP/s$k.log"; done
+          python3 scripts/merge_shards.py "$RUNNER_TEMP"/s*.log | cmp - "$RUNNER_TEMP/full.csv"
+          printf 'ts,price,size,side\n1,10,100,1\n2,10.01,200,-1\n' > "$RUNNER_TEMP/t.csv"
+          $B import "$RUNNER_TEMP/t.csv" "$RUNNER_TEMP/t.tf" ABC && $B info "$RUNNER_TEMP/t.tf"
 
   sanitizers:
     name: sanitizer (${{ matrix.preset }})
@@ -71,7 +78,7 @@ jobs:
       UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
       TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Install tools
         run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build
       # Recent runner kernels use 32 bits of mmap randomisation, which
@@ -89,13 +96,37 @@ jobs:
       CC: clang-18
       CXX: clang++-18
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Install tools
         run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build clang-tidy-18
       - name: Configure (for compile_commands.json)
         run: cmake --preset debug -DTICKFORGE_BUILD_TESTS=OFF
       - name: clang-tidy
         run: clang-tidy-18 -p build/debug --quiet src/*.cpp apps/*.cpp
+
+  # Real nvcc, real CUDA runtime, full test suite. GitHub-hosted runners have no
+  # GPU, so the GPU-vs-CPU comparison tests skip themselves (and say so); the
+  # kernel itself is exercised by python/examples/gpu_colab.ipynb on a free T4.
+  cuda:
+    name: CUDA build (nvcc 12.6)
+    runs-on: ubuntu-24.04
+    container: nvidia/cuda:12.6.3-devel-ubuntu24.04
+    steps:
+      - name: Install tools
+        run: apt-get update -q && apt-get install -y -q --no-install-recommends cmake ninja-build git ca-certificates
+      - uses: actions/checkout@v6
+      - name: Configure
+        run: cmake --preset cuda -DCMAKE_CUDA_ARCHITECTURES="70;75;80;86;89;90"
+      - name: Build (nvcc -Werror=all-warnings)
+        run: cmake --build --preset cuda
+      - name: Tests (GPU tests skip without a device)
+        run: ctest --preset cuda
+      - name: Show CUDA test status
+        run: ./build/cuda/tickforge_tests --gtest_filter='BatchFeaturesCuda.*'
+      - name: Kernel is in the binary
+        run: |
+          cuobjdump --list-elf build/cuda/tickforge_tests | tee elf.txt
+          grep -q sm_80 elf.txt
 
   benchmarks:
     name: release build + benchmarks
@@ -104,7 +135,7 @@ jobs:
       CC: gcc-13
       CXX: g++-13
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Install tools
         run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build
       - run: cmake --preset release
@@ -114,8 +145,8 @@ jobs:
           ./build/release/tickforge_bench --benchmark_min_time=0.3s \
             --benchmark_out=bench.json --benchmark_out_format=json
           python3 scripts/bench_to_site.py bench.json bench-site.json \
-            --label "GitHub Actions ubuntu-24.04 runner" --compiler "$($CXX --version | head -1)"
-      - uses: actions/upload-artifact@v4
+            --label "GitHub Actions ubuntu-24.04 runner" --compiler "$($CXX --version | head -1)" --commit "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v6
         with:
           name: benchmarks
           path: |
@@ -125,8 +156,66 @@ jobs:
   docker:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Build image
         run: docker build -t tickforge:ci .
       - name: Run image
         run: docker run --rm tickforge:ci
+
+  # Deploys the sweep as an Indexed Job to a real (throwaway) Kubernetes
+  # cluster, collects every pod's shard and checks the merge is byte-identical
+  # to a single-machine run of the same image.
+  kubernetes:
+    name: distributed sweep on Kubernetes (kind)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build image
+        run: docker build -t ghcr.io/henryzhangpku/tickforge:latest .
+      - uses: helm/kind-action@v1
+        with:
+          cluster_name: tickforge
+      - name: Load image into the cluster
+        run: kind load docker-image ghcr.io/henryzhangpku/tickforge:latest --name tickforge
+      - name: Run the Indexed Job
+        run: |
+          kubectl apply -f deploy/k8s/sweep-job.yaml
+          kubectl wait --for=condition=complete job/tickforge-sweep --timeout=600s || {
+            kubectl describe job tickforge-sweep; kubectl get pods -o wide; kubectl logs -l app=tickforge --tail=50; exit 1; }
+          kubectl get pods -l app=tickforge -o wide
+      - name: Collect shards and compare with a single-machine run
+        run: |
+          mkdir shards
+          for pod in $(kubectl get pods -l app=tickforge -o name); do
+            kubectl logs "$pod" > "shards/${pod#pod/}.log"
+          done
+          ls -l shards
+          python3 scripts/merge_shards.py shards/*.log > merged.csv
+          docker run --rm ghcr.io/henryzhangpku/tickforge:latest sh -c \
+            'tickforge_cli gen-universe /tmp/u 4 300000 42 >&2 && tickforge_cli sweep /tmp/u --csv --threads 1' > single.csv
+          wc -l merged.csv single.csv
+          cmp merged.csv single.csv && echo "distributed sweep == single-machine sweep"
+
+  publish-image:
+    name: publish image to GHCR
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build-test, docker, kubernetes]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/henryzhangpku/tickforge:latest
+            ghcr.io/henryzhangpku/tickforge:${{ github.sha }}

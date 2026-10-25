@@ -30,12 +30,15 @@ add_library(tickforge_core STATIC
   src/synth.cpp
   src/backtest.cpp
   src/thread_pool.cpp
+  src/work_stealing_pool.cpp
   src/sweep.cpp
   src/plugins.cpp
   src/batch_features.cpp)
 add_library(tickforge::core ALIAS tickforge_core)
 target_include_directories(tickforge_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_compile_options(tickforge_core PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror)
+# C++ only: nvcc does not understand these, and the .cu file gets its own flags below.
+target_compile_options(tickforge_core PRIVATE
+  $<$<COMPILE_LANGUAGE:CXX>:-Wall -Wextra -Wpedantic -Wconversion -Wshadow -Werror>)
 find_package(Threads REQUIRED)
 target_link_libraries(tickforge_core PUBLIC Threads::Threads)
 
@@ -46,6 +49,7 @@ if(TICKFORGE_CUDA)
     set(CMAKE_CUDA_ARCHITECTURES 70 80 90)
   endif()
   target_sources(tickforge_core PRIVATE src/batch_features.cu)
+  target_compile_options(tickforge_core PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-Werror=all-warnings --expt-relaxed-constexpr>)
   target_compile_definitions(tickforge_core PUBLIC TICKFORGE_HAS_CUDA)
   find_package(CUDAToolkit REQUIRED)
   target_link_libraries(tickforge_core PUBLIC CUDA::cudart)

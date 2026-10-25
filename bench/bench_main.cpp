@@ -5,10 +5,13 @@
 
 #include <atomic>
 #include <filesystem>
+#include <functional>
+#include <latch>
 #include <memory>
 #include <memory_resource>
 #include <numeric>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 #include <unistd.h>
@@ -21,7 +24,9 @@
 #include "tickforge/spsc_ring.hpp"
 #include "tickforge/sweep.hpp"
 #include "tickforge/synth.hpp"
+#include "tickforge/thread_pool.hpp"
 #include "tickforge/tick_store.hpp"
+#include "tickforge/work_stealing_pool.hpp"
 
 namespace tf = tickforge;
 
@@ -188,7 +193,7 @@ void BM_Sweep(benchmark::State& state) {
   g.exit_z = {0.0, 0.25};
   const auto params = tf::expand(g);  // 32 backtests x 1M ticks
   const auto threads = static_cast<std::size_t>(state.range(0));
-  for (auto _ : state) benchmark::DoNotOptimize(tf::run_sweep(cols, params, threads));
+  for (auto _ : state) benchmark::DoNotOptimize(tf::run_sweep(cols, params, threads, tf::PoolKind::WorkStealing));
   state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * params.size() * cols.size_ticks()));
   state.counters["backtests"] = static_cast<double>(params.size());
 }
@@ -197,6 +202,53 @@ BENCHMARK(BM_Sweep)
     ->DenseRange(1, static_cast<int>(std::max(1U, std::thread::hardware_concurrency())))
     ->Unit(benchmark::kMillisecond)
     ->UseRealTime();
+
+// ---- pools: central queue vs work stealing --------------------------------
+
+// Fork-join tree: every node posts two children until depth 14 (16k leaves of
+// ~1 us each). Children are spawned from inside workers, the case work stealing
+// is built for: they land on the spawning worker's own deque instead of one
+// shared, contended queue.
+template <class Pool>
+void tree_spawn(benchmark::State& state) {
+  constexpr int kDepth = 14;
+  Pool pool(static_cast<std::size_t>(state.range(0)));
+  for (auto _ : state) {
+    std::latch done(1 << kDepth);
+    std::function<void(int)> node = [&](int depth) {
+      if (depth == kDepth) {
+        double x = 0;
+        for (int i = 0; i < 300; ++i) x += static_cast<double>(i) * 1e-3;
+        benchmark::DoNotOptimize(x);
+        done.count_down();
+        return;
+      }
+      pool.post([&node, depth] { node(depth + 1); });
+      pool.post([&node, depth] { node(depth + 1); });
+    };
+    node(0);
+    done.wait();
+  }
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * (2 << kDepth)));
+}
+void BM_PoolTreeCentral(benchmark::State& s) { tree_spawn<tf::ThreadPool>(s); }
+void BM_PoolTreeStealing(benchmark::State& s) { tree_spawn<tf::WorkStealingPool>(s); }
+BENCHMARK(BM_PoolTreeCentral)->ArgName("threads")->Arg(4)->Unit(benchmark::kMillisecond)->UseRealTime();
+BENCHMARK(BM_PoolTreeStealing)->ArgName("threads")->Arg(4)->Unit(benchmark::kMillisecond)->UseRealTime();
+
+// Coarse tasks (the real sweep): both pools should tie, because the queue is
+// touched only 32 times per run.
+void BM_SweepCentral(benchmark::State& state) {
+  const auto& cols = dataset().columns();
+  tf::SweepGrid g;
+  g.windows = {200, 500, 1000, 2000};
+  g.entry_z = {0.5, 0.75, 1.0, 1.5};
+  g.exit_z = {0.0, 0.25};
+  const auto params = tf::expand(g);
+  for (auto _ : state) benchmark::DoNotOptimize(tf::run_sweep(cols, params, 0, tf::PoolKind::Central));
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * params.size() * cols.size_ticks()));
+}
+BENCHMARK(BM_SweepCentral)->Unit(benchmark::kMillisecond)->UseRealTime();
 
 // ---- batch features --------------------------------------------------------
 
@@ -212,7 +264,28 @@ void BM_BatchFeaturesCpu(benchmark::State& state) {
   }
   state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * S * T));
 }
-BENCHMARK(BM_BatchFeaturesCpu)->ArgName("symbols")->Arg(64)->Arg(512)->Unit(benchmark::kMillisecond);
+BENCHMARK(BM_BatchFeaturesCpu)->ArgName("symbols")->Arg(64)->Arg(512)->Arg(4096)->Unit(benchmark::kMillisecond);
+
+#ifdef TICKFORGE_HAS_CUDA
+// Includes host<->device copies, as a caller would see it. Skips without a GPU.
+void BM_BatchFeaturesCuda(benchmark::State& state) {
+  if (!tf::cuda_available()) {
+    state.SkipWithError("no CUDA device");
+    return;
+  }
+  const auto S = static_cast<std::size_t>(state.range(0));
+  constexpr std::size_t T = 4096;
+  std::vector<double> px(S * T), mean(S * T), vol(S * T);
+  tf::Xoshiro256 rng(1);
+  for (std::size_t i = 0; i < px.size(); ++i) px[i] = 100.0 + rng.uniform();
+  for (auto _ : state) {
+    tf::rolling_features_batch(px, S, {100, 0.995}, mean, vol, tf::Backend::Cuda);
+    benchmark::DoNotOptimize(mean.data());
+  }
+  state.SetItemsProcessed(static_cast<std::int64_t>(state.iterations() * S * T));
+}
+BENCHMARK(BM_BatchFeaturesCuda)->ArgName("symbols")->Arg(64)->Arg(512)->Arg(4096)->Unit(benchmark::kMillisecond);
+#endif
 
 }  // namespace
 

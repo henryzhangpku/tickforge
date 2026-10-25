@@ -31,6 +31,7 @@ def main() -> None:
     ap.add_argument("dst")
     ap.add_argument("--label", required=True)
     ap.add_argument("--compiler", default="")
+    ap.add_argument("--commit", default="")
     args = ap.parse_args()
 
     with open(args.src, encoding="utf-8") as f:
@@ -49,6 +50,7 @@ def main() -> None:
             "caches": caches,
             "build_type": ctx.get("library_build_type"),
             "compiler": args.compiler,
+            "commit": args.commit,
             "date": ctx.get("date") or dt.datetime.now(dt.timezone.utc).isoformat(),
         },
         "benchmarks": [
