@@ -1,0 +1,46 @@
+# Builds the Release benchmarks on a GitHub runner, adds their results to the
+# static site in docs/, and publishes it to the gh-pages branch.
+name: Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    env:
+      CC: gcc-13
+      CXX: g++-13
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install tools
+        run: sudo apt-get update -q && sudo apt-get install -y -q ninja-build
+      - name: Build (Release)
+        run: |
+          cmake --preset release -DTICKFORGE_BUILD_TESTS=OFF
+          cmake --build --preset release --target tickforge_bench
+      - name: Run benchmarks
+        run: |
+          ./build/release/tickforge_bench --benchmark_min_time=0.5s \
+            --benchmark_out=bench.json --benchmark_out_format=json
+          python3 scripts/bench_to_site.py bench.json docs/data/bench-ci.json \
+            --label "GitHub Actions ubuntu-24.04 runner" --compiler "$($CXX --version | head -1)"
+      - name: Publish docs/ to gh-pages
+        run: |
+          cd docs
+          touch .nojekyll
+          git init -q -b gh-pages
+          git config user.name "Henry Zhang"
+          git config user.email "2763638+henryzhangpku@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Publish site from ${GITHUB_SHA::7}"
+          git push -q --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" gh-pages

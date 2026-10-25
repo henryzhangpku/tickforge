@@ -78,9 +78,13 @@ if(TICKFORGE_BUILD_TESTS)
   gtest_discover_tests(tickforge_tests DISCOVERY_TIMEOUT 60)
 
   # Separate binary: it replaces global operator new to count allocations.
-  add_executable(test_no_alloc tests/test_no_alloc.cpp)
-  target_link_libraries(test_no_alloc PRIVATE tickforge::core GTest::gtest_main)
-  gtest_discover_tests(test_no_alloc DISCOVERY_TIMEOUT 60)
+  # Skipped under TSan, whose static runtime (clang) defines operator new and
+  # delete itself; the test is single-threaded, so TSan would add nothing.
+  if(NOT TICKFORGE_SANITIZE MATCHES "thread")
+    add_executable(test_no_alloc tests/test_no_alloc.cpp)
+    target_link_libraries(test_no_alloc PRIVATE tickforge::core GTest::gtest_main)
+    gtest_discover_tests(test_no_alloc DISCOVERY_TIMEOUT 60)
+  endif()
 endif()
 
 # ---- benchmarks --------------------------------------------------------------

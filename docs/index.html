@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tickforge</title>
+<meta name="description" content="A C++20 tick research engine: mmap columnar store, arena memory, lock-free pipeline, parallel sweeps, Python bindings, optional CUDA. Learning project on synthetic data.">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #fcfcfb; --surface: #ffffff; --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #8a8983;
+  --rule: #e4e3de; --grid: #ecebe7; --code-bg: #f3f2ee; --accent: #2a78d6;
+  --series-1: #2a78d6; --series-2: #eb6834; --ideal: #8a8983;
+  --box: #f3f2ee; --box-edge: #c9c8c1;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #141413; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #8f8e86;
+    --rule: #33332f; --grid: #2a2a27; --code-bg: #22221f; --accent: #3987e5;
+    --series-1: #3987e5; --series-2: #d95926; --ideal: #8f8e86;
+    --box: #22221f; --box-edge: #45443f;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #141413; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #8f8e86;
+  --rule: #33332f; --grid: #2a2a27; --code-bg: #22221f; --accent: #3987e5;
+  --series-1: #3987e5; --series-2: #d95926; --ideal: #8f8e86;
+  --box: #22221f; --box-edge: #45443f;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+main { max-width: 860px; margin: 0 auto; padding: 40px 16px 80px; }
+h1 { font-size: 2rem; margin: 0 0 4px; letter-spacing: -0.02em; }
+h2 { font-size: 1.3rem; margin: 48px 0 12px; padding-top: 16px; border-top: 1px solid var(--rule); }
+h3 { font-size: 1.02rem; margin: 24px 0 6px; }
+p, li { color: var(--ink); }
+.lede { color: var(--ink-2); font-size: 1.08rem; margin: 0 0 12px; }
+.meta { color: var(--ink-3); font-size: 0.9rem; }
+a { color: var(--accent); }
+code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.88em; }
+code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+pre { background: var(--code-bg); padding: 14px 16px; border-radius: 8px; overflow-x: auto; line-height: 1.45; }
+pre code { background: none; padding: 0; }
+.notice { border-left: 3px solid var(--ink-3); padding: 4px 12px; color: var(--ink-2); font-size: 0.93rem; margin: 16px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; margin: 8px 0; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { color: var(--ink-2); font-weight: 600; }
+td code { word-break: break-all; }
+pre { max-width: 100%; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.figure { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; padding: 16px; margin: 16px 0; }
+.figure svg { display: block; width: 100%; height: auto; }
+.caption { color: var(--ink-2); font-size: 0.88rem; margin-top: 8px; }
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 4px; }
+.tabs button {
+  font: inherit; font-size: 0.88rem; padding: 4px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--rule); background: var(--surface); color: var(--ink-2);
+}
+.tabs button[aria-pressed="true"] { border-color: var(--ink-2); color: var(--ink); font-weight: 600; }
+.machine { font-size: 0.86rem; color: var(--ink-2); margin: 6px 0 0; }
+.legend { display: flex; gap: 16px; font-size: 0.85rem; color: var(--ink-2); margin: 4px 0 8px; flex-wrap: wrap; }
+.legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; background: var(--c); vertical-align: -1px; }
+.legend .dash::before { height: 0; border-top: 2px dashed var(--c); background: none; width: 14px; vertical-align: 3px; }
+.tip {
+  position: fixed; pointer-events: none; background: var(--surface); color: var(--ink); border: 1px solid var(--rule);
+  border-radius: 6px; padding: 6px 9px; font-size: 0.82rem; box-shadow: 0 2px 8px rgba(0,0,0,.12); display: none; z-index: 10;
+}
+.svgtext { fill: var(--ink-2); font: 12px ui-sans-serif, system-ui, sans-serif; }
+.svgtext.strong { fill: var(--ink); font-weight: 600; }
+.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 640px) { .cols { grid-template-columns: 1fr; } h1 { font-size: 1.6rem; } }
+footer { margin-top: 56px; color: var(--ink-3); font-size: 0.85rem; border-top: 1px solid var(--rule); padding-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>tickforge</h1>
+  <p class="lede">A small C++20 research engine for tick data: a memory-mapped columnar store, arena memory, a lock-free pipeline, an event-driven backtest, parallel parameter sweeps, zero-copy Python bindings, and an optional CUDA kernel.</p>
+  <p class="meta"><a href="https://github.com/henryzhangpku/tickforge">github.com/henryzhangpku/tickforge</a> · MIT · Henry Zhang</p>
+  <p class="notice">Learning project. All data is synthetic and generated from a seed; the strategy is a deliberately simple toy whose profit on that data is a property of how the data was generated. Nothing here is investment advice.</p>
+
+  <h2>Architecture</h2>
+  <div class="figure">
+    <svg viewBox="0 0 800 380" role="img" aria-labelledby="arch-title">
+      <title id="arch-title">Data flows from the synthetic generator into a columnar file, is memory-mapped as spans, and feeds either a direct backtest loop or a two-thread SPSC pipeline; a thread pool runs many backtests for sweeps, and pybind11 exposes the results to Python as NumPy arrays.</title>
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="var(--ink-3)"/>
+        </marker>
+      </defs>
+      <g fill="var(--box)" stroke="var(--box-edge)" stroke-width="1.2">
+        <rect x="10" y="20" width="170" height="64" rx="8"/>
+        <rect x="230" y="20" width="200" height="64" rx="8"/>
+        <rect x="480" y="20" width="300" height="64" rx="8"/>
+        <rect x="10" y="150" width="230" height="84" rx="8"/>
+        <rect x="290" y="150" width="230" height="84" rx="8"/>
+        <rect x="570" y="150" width="210" height="84" rx="8"/>
+        <rect x="10" y="290" width="370" height="70" rx="8"/>
+        <rect x="430" y="290" width="350" height="70" rx="8"/>
+      </g>
+      <g class="svgtext">
+        <text x="95" y="46" text-anchor="middle" class="svgtext strong">Synthetic generator</text>
+        <text x="95" y="66" text-anchor="middle">xoshiro256** + OU price</text>
+        <text x="330" y="46" text-anchor="middle" class="svgtext strong">Columnar tick file</text>
+        <text x="330" y="66" text-anchor="middle">SoA, 64-byte aligned columns</text>
+        <text x="630" y="46" text-anchor="middle" class="svgtext strong">MappedTickFile (mmap)</text>
+        <text x="630" y="66" text-anchor="middle">std::span&lt;const T&gt; views, zero copy</text>
+
+        <text x="125" y="176" text-anchor="middle" class="svgtext strong">Direct replay</text>
+        <text x="125" y="196" text-anchor="middle">for each tick: Backtester::on_tick</text>
+        <text x="125" y="216" text-anchor="middle">CRTP strategy, inlined</text>
+        <text x="405" y="176" text-anchor="middle" class="svgtext strong">Pipelined replay</text>
+        <text x="405" y="196" text-anchor="middle">producer → SpscRing → consumer</text>
+        <text x="405" y="216" text-anchor="middle">acquire/release, batched consume</text>
+        <text x="675" y="176" text-anchor="middle" class="svgtext strong">Batch features</text>
+        <text x="675" y="196" text-anchor="middle">symbols × ticks, time-major</text>
+        <text x="675" y="216" text-anchor="middle">CUDA kernel or CPU fallback</text>
+
+        <text x="195" y="318" text-anchor="middle" class="svgtext strong">Parameter sweep</text>
+        <text x="195" y="340" text-anchor="middle">ThreadPool + futures, one Arena per task</text>
+        <text x="605" y="318" text-anchor="middle" class="svgtext strong">Python (pybind11)</text>
+        <text x="605" y="340" text-anchor="middle">tickforge.sweep(...) → NumPy, GIL released</text>
+      </g>
+      <g stroke="var(--ink-3)" stroke-width="1.5" fill="none" marker-end="url(#arrow)">
+        <path d="M180 52 H226"/>
+        <path d="M430 52 H476"/>
+        <path d="M560 84 L150 146"/>
+        <path d="M630 84 L420 146"/>
+        <path d="M700 84 L690 146"/>
+        <path d="M125 234 L180 286"/>
+        <path d="M380 325 H426"/>
+        <path d="M675 234 L640 286"/>
+      </g>
+    </svg>
+    <p class="caption">Every box below the file reads the same immutable mapped columns. Per-run state lives in a per-backtest arena; nothing on the per-tick path allocates.</p>
+  </div>
+
+  <h2 id="benchmarks">Benchmarks</h2>
+  <p>Google Benchmark, Release build, 1,000,000 synthetic ticks read through <code>mmap</code>. The machine is named on every dataset; shared cloud VMs are noisy, so treat differences under ~10% as noise.</p>
+  <div class="tabs" id="machine-tabs" role="group" aria-label="Benchmark machine"></div>
+  <p class="machine" id="machine-desc">Loading benchmark data…</p>
+
+  <div class="figure">
+    <h3 style="margin-top:0">Sweep scaling: 32 backtests × 1M ticks</h3>
+    <div class="legend"><span style="--c: var(--series-1)">measured speed-up</span><span class="dash" style="--c: var(--ideal)">ideal (linear)</span></div>
+    <svg id="chart-scaling" viewBox="0 0 760 300" role="img" aria-label="Speed-up of the parameter sweep versus thread count"></svg>
+    <p class="caption" id="scaling-caption"></p>
+  </div>
+
+  <div class="figure">
+    <h3 style="margin-top:0">Throughput by component (million ticks per second)</h3>
+    <div class="legend"><span style="--c: var(--series-1)">compile-time dispatch / default path</span><span style="--c: var(--series-2)">runtime dispatch / alternative</span></div>
+    <svg id="chart-throughput" viewBox="0 0 760 360" role="img" aria-label="Throughput of each component"></svg>
+    <p class="caption">Higher is better. Pairs compare the CRTP path against the virtual one, and direct replay against the two-thread ring pipeline.</p>
+  </div>
+
+  <h3>All results</h3>
+  <table id="bench-table"><thead><tr><th>Benchmark</th><th class="num">Time</th><th class="num">Throughput</th></tr></thead><tbody></tbody></table>
+
+  <h2 id="design-notes">Design notes</h2>
+
+  <h3>Columnar file + mmap</h3>
+  <p>Ticks are stored as structure-of-arrays: timestamps, prices, sizes and sides each in their own contiguous column, each starting on a 64-byte boundary. A study that reads only prices touches only price pages, and a scan streams through memory the way hardware prefetchers like. Opening a file is a single <code>mmap</code>; columns come back as <code>std::span&lt;const T&gt;</code> into the mapping, so there is no parse step and no copy, and the OS page cache is shared between processes reading the same file. <code>MADV_SEQUENTIAL</code> asks for aggressive read-ahead. The cast from mapped bytes to typed spans is the case C++23's <code>std::start_lifetime_as</code> was added for; for trivially-copyable arithmetic types every major compiler already treats it as intended.</p>
+
+  <h3>Memory: arenas and no allocation on the hot path</h3>
+  <p>Each backtest gets a <code>std::pmr::monotonic_buffer_resource</code> over a 64-byte-aligned block sized up front from its parameters. Rolling-window buffers are <code>std::pmr::vector</code>s carved from it; allocation is a pointer bump and the whole arena is released at once. A separate test binary replaces global <code>operator new</code> with a counting version and asserts that feeding 200,000 ticks through a constructed backtester performs <em>zero</em> allocations; the arena's upstream is <code>null_memory_resource()</code>, so outgrowing the scratch would throw instead of silently calling <code>malloc</code>.</p>
+
+  <h3>The SPSC ring</h3>
+  <p>One producer, one consumer, power-of-two capacity, no locks and no CAS. The producer writes a slot then publishes it with a release store of <code>tail</code>; the consumer's acquire load of <code>tail</code> makes that slot visible. The mirror pair on <code>head</code> stops the producer overwriting a slot still being read. Head and tail sit on separate cache lines, and each side caches the other's index so the common case touches only its own line. The first version popped one item per release store and ran at a third of direct-replay speed, because every pop bounced a cache line between cores; consuming everything available and freeing it with one store brought the pipeline level with direct replay. ThreadSanitizer runs the concurrent tests in CI.</p>
+
+  <h3>CRTP on the hot path, virtual for plugins</h3>
+  <p>Features (<code>FeatureBase&lt;Derived&gt;</code>) and strategies (<code>StrategyBase&lt;Derived&gt;</code>) use CRTP: the call is resolved at compile time, inlined into the loop, and the compiler can keep state in registers and fuse the three feature updates. The same strategy is also available behind <code>IStrategy</code>, created by name from a registry in its own translation unit (so the compiler cannot devirtualise it), which is how you would add strategies without recompiling the engine or load them from a shared library.</p>
+  <p>The measured trade-off is more nuanced than "virtual is slow". Three small virtual feature updates per tick cost a clear 20–50% across runs, because each blocks inlining of a body that is only a few instructions long. One virtual strategy call per tick is within run-to-run noise (about ±5%), because the per-tick work is dominated by a <code>log</code> and the feature updates; an indirect branch that always goes to the same target is predicted almost perfectly. Rule of thumb: keep tiny, high-frequency operations static; put the plugin boundary around coarse units of work.</p>
+
+  <h3>Parallel sweeps and determinism</h3>
+  <p>A sweep is the cartesian product of a parameter grid, one full backtest per point, submitted to a fixed thread pool that returns <code>std::future</code>s. Every backtest is single-threaded over immutable data and writes only to its own result slot, so results are bit-identical for any thread count; a test compares 1, 2, 3, 4 and 8 threads, and the Python example asserts the same. The pool uses one mutex-protected queue rather than work stealing: tasks are whole backtests (tens of milliseconds), so the queue is touched a few dozen times per sweep and contention is unmeasurable. Work stealing earns its complexity when tasks are microseconds long or spawn children.</p>
+
+  <h3>Python</h3>
+  <p>The pybind11 module exposes <code>generate</code>, <code>TickStore</code>, <code>sweep</code>, <code>backtest</code> and <code>rolling_features</code>. <code>TickStore.price</code> is a read-only NumPy array whose data pointer is the mmap itself (its base object keeps the mapping alive). Sweep results are built in C++ vectors and handed to NumPy through a capsule that owns them, so nothing is copied on the way out. The GIL is released while C++ runs.</p>
+<pre><code>import tickforge
+tickforge.generate("ticks.tf", n_ticks=2_000_000, seed=42)
+store = tickforge.TickStore("ticks.tf")
+res = tickforge.sweep(store, windows=[200, 500, 1000], entry_z=[0.5, 1.0, 1.5], exit_z=[0.0, 0.25])
+res["sharpe"].argmax(), res["pnl"].dtype   # NumPy arrays, one row per grid point</code></pre>
+
+  <h3>GPU: the CUDA mental model</h3>
+  <p><code>rolling_features_batch</code> computes a rolling mean and EWMA volatility for many symbols at once. Data is time-major (<code>prices[t * n_symbols + s]</code>) and each GPU thread owns one symbol, walking forward in time. At every step the 32 threads of a warp read 32 adjacent doubles, so the load <em>coalesces</em> into a few wide memory transactions, the single biggest factor in GPU bandwidth. Running sums live in registers; the value leaving the window is re-read from global memory, usually from L2. Shared memory is not needed because no data is reused across threads. The kernel is bandwidth-bound, so a GPU wins only with thousands of symbols resident on the device; for small batches the PCIe copy dominates. The CUDA path is behind <code>-DTICKFORGE_CUDA=ON</code>; CI builds and tests the CPU fallback, which uses the same layout with symbols in the inner loop.</p>
+
+  <h3>Production</h3>
+  <ul>
+    <li>CMake presets for release, debug, ASan+UBSan, TSan, Python and CUDA builds.</li>
+    <li>GitHub Actions: gcc and clang builds with C++, Python and CLI tests; ASan/UBSan and TSan jobs; clang-tidy with warnings as errors; Release benchmarks (whose output feeds this page); Docker image build and run.</li>
+    <li>A two-stage Dockerfile that runs the test suite during the build and ships a slim runtime image.</li>
+    <li>File format with magic, version, explicit offsets and bounds checks on open; errors surface as exceptions with the path and <code>errno</code>.</li>
+  </ul>
+
+  <h2>Limitations</h2>
+  <ul>
+    <li>Synthetic data only, single instrument per file, trades only (no quotes or order book).</li>
+    <li>The fill model is simple: market orders fill at the next tick's price plus fixed slippage, with no queue position, partial fills or market impact.</li>
+    <li>Sharpe is per 1,000-tick bucket and not annualised.</li>
+    <li>The CUDA kernel is written but not exercised in CI (no GPU runners); its numerical agreement with the CPU path is expected to within a few ULP of <code>log</code>.</li>
+    <li>Little-endian, POSIX only.</li>
+  </ul>
+
+  <footer>tickforge · learning project · synthetic data · not investment advice · MIT licence</footer>
+</main>
+<div class="tip" id="tip" role="tooltip"></div>
+<script>
+(function () {
+  "use strict";
+  const DATASETS = [
+    { key: "ci", file: "data/bench-ci.json" },
+    { key: "local", file: "data/bench-local.json" },
+  ];
+  const NS = "http://www.w3.org/2000/svg";
+  const tip = document.getElementById("tip");
+
+  function el(name, attrs, parent) {
+    const e = document.createElementNS(NS, name);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+  function showTip(evt, html) {
+    tip.innerHTML = html;
+    tip.style.display = "block";
+    const x = Math.min(evt.clientX + 12, window.innerWidth - tip.offsetWidth - 8);
+    tip.style.left = x + "px";
+    tip.style.top = (evt.clientY + 12) + "px";
+  }
+  function hideTip() { tip.style.display = "none"; }
+  function hover(node, html) {
+    node.addEventListener("mousemove", (e) => showTip(e, html));
+    node.addEventListener("mouseleave", hideTip);
+  }
+  const fmt = (v, d = 1) => v.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
+  const find = (bs, name) => bs.find((b) => b.name === name);
+
+  function drawScaling(data) {
+    const svg = document.getElementById("chart-scaling");
+    svg.replaceChildren();
+    const runs = data.benchmarks
+      .filter((b) => b.name.startsWith("BM_Sweep/threads:"))
+      .map((b) => ({ t: parseInt(b.name.split("threads:")[1], 10), ms: b.real_time }))
+      .sort((a, b) => a.t - b.t);
+    const cap = document.getElementById("scaling-caption");
+    if (!runs.length) { cap.textContent = "No sweep results in this dataset."; return; }
+    const base = runs[0].ms;
+    runs.forEach((r) => (r.s = base / r.ms));
+    const W = 760, H = 300, L = 48, R = 16, T = 16, B = 40;
+    const maxT = runs[runs.length - 1].t;
+    const maxY = Math.max(maxT, ...runs.map((r) => r.s)) * 1.1;
+    const y = (v) => T + (H - T - B) * (1 - v / maxY);
+    const band = (W - L - R) / runs.length;
+    const xc = (i) => L + band * (i + 0.5);
+    for (let g = 0; g <= Math.ceil(maxY); g++) {
+      el("line", { x1: L, x2: W - R, y1: y(g), y2: y(g), stroke: "var(--grid)", "stroke-width": 1 }, svg);
+      el("text", { x: L - 8, y: y(g) + 4, "text-anchor": "end", class: "svgtext" }, svg).textContent = g + "×";
+    }
+    const bw = Math.min(56, band * 0.55);
+    runs.forEach((r, i) => {
+      const top = y(r.s), bottom = y(0);
+      const h = Math.max(0, bottom - top), rad = Math.min(4, h / 2);
+      const x0 = xc(i) - bw / 2;
+      el("path", { d: `M${x0},${bottom} V${top + rad} Q${x0},${top} ${x0 + rad},${top} H${x0 + bw - rad} Q${x0 + bw},${top} ${x0 + bw},${top + rad} V${bottom} Z`, fill: "var(--series-1)" }, svg);
+      el("text", { x: xc(i), y: top - 6, "text-anchor": "middle", class: "svgtext strong" }, svg).textContent = fmt(r.s, 2) + "×";
+      el("text", { x: xc(i), y: H - B + 18, "text-anchor": "middle", class: "svgtext" }, svg).textContent = r.t + (r.t === 1 ? " thread" : " threads");
+      const hit = el("rect", { x: xc(i) - band / 2, y: T, width: band, height: H - T - B, fill: "transparent" }, svg);
+      hover(hit, `<b>${r.t} thread${r.t > 1 ? "s" : ""}</b><br>${fmt(r.ms, 0)} ms for 32 backtests<br>speed-up ${fmt(r.s, 2)}× (ideal ${r.t}×)<br>efficiency ${fmt(100 * r.s / r.t, 0)}%`);
+    });
+    // Ideal linear reference through the bar centres.
+    const pts = runs.map((r, i) => `${xc(i)},${y(r.t)}`).join(" ");
+    el("polyline", { points: pts, fill: "none", stroke: "var(--ideal)", "stroke-width": 2, "stroke-dasharray": "5 4" }, svg);
+    el("line", { x1: L, x2: W - R, y1: y(0), y2: y(0), stroke: "var(--ink-3)", "stroke-width": 1 }, svg);
+    const last = runs[runs.length - 1];
+    cap.textContent = `${maxT} threads: ${fmt(last.s, 2)}× faster than 1 thread (${fmt(100 * last.s / last.t, 0)}% parallel efficiency); ${fmt(last.ms, 0)} ms for 32 million-tick backtests. Results are bit-identical at every thread count.`;
+  }
+
+  const PAIRS = [
+    { label: "Feature updates (VWAP, vol, OFI)", a: ["CRTP", "BM_FeaturesCrtp"], b: ["virtual", "BM_FeaturesVirtual"] },
+    { label: "Full backtest: strategy dispatch", a: ["CRTP", "BM_BacktestCrtp"], b: ["virtual plugin", "BM_BacktestVirtual"] },
+    { label: "Full backtest: replay mode", a: ["direct", "BM_BacktestCrtp"], b: ["SPSC pipeline", "BM_BacktestPipelined/real_time"] },
+    { label: "SPSC ring transfer (2 threads)", a: ["ring only", "BM_SpscRingTransfer/real_time"] },
+    { label: "Batch features, 512 symbols (CPU)", a: ["CPU", "BM_BatchFeaturesCpu/symbols:512"] },
+  ];
+
+  function drawThroughput(data) {
+    const svg = document.getElementById("chart-throughput");
+    svg.replaceChildren();
+    const rows = [];
+    PAIRS.forEach((p) => {
+      [p.a, p.b].filter(Boolean).forEach((s, j) => {
+        const b = find(data.benchmarks, s[1]);
+        if (b && b.items_per_second) rows.push({ group: p.label, name: s[0], v: b.items_per_second / 1e6, series: j, first: j === 0, bench: b });
+      });
+    });
+    const W = 760, L = 250, R = 70, rowH = 26, groupGap = 14, T = 8;
+    let yPos = T;
+    rows.forEach((r) => { if (r.first && r !== rows[0]) yPos += groupGap; r.y = yPos; yPos += rowH; });
+    const H = yPos + 8;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    const maxV = Math.max(...rows.map((r) => r.v)) * 1.05;
+    const x = (v) => L + (W - L - R) * (v / maxV);
+    rows.forEach((r) => {
+      if (r.first) el("text", { x: 0, y: r.y + 17, class: "svgtext strong" }, svg).textContent = r.group;
+      el("text", { x: L - 8, y: r.y + 17, "text-anchor": "end", class: "svgtext" }, svg).textContent = r.name;
+      const w = Math.max(2, x(r.v) - L), h = rowH - 8, rad = Math.min(4, w / 2);
+      const y0 = r.y + 4;
+      el("path", { d: `M${L},${y0} H${L + w - rad} Q${L + w},${y0} ${L + w},${y0 + rad} V${y0 + h - rad} Q${L + w},${y0 + h} ${L + w - rad},${y0 + h} H${L} Z`, fill: r.series ? "var(--series-2)" : "var(--series-1)" }, svg);
+      el("text", { x: L + w + 6, y: r.y + 17, class: "svgtext" }, svg).textContent = fmt(r.v, 1);
+      const hit = el("rect", { x: 0, y: r.y, width: W, height: rowH, fill: "transparent" }, svg);
+      hover(hit, `<b>${r.group}</b> · ${r.name}<br>${fmt(r.v, 1)} M items/s<br>${fmt(r.bench.real_time, 2)} ${r.bench.time_unit} per iteration`);
+    });
+    el("line", { x1: L, x2: L, y1: T, y2: H - 8, stroke: "var(--ink-3)", "stroke-width": 1 }, svg);
+  }
+
+  function drawTable(data) {
+    const tb = document.querySelector("#bench-table tbody");
+    tb.replaceChildren();
+    data.benchmarks.forEach((b) => {
+      const tr = document.createElement("tr");
+      let thr = "";
+      if (b.items_per_second) thr = fmt(b.items_per_second / 1e6, 1) + " M items/s";
+      if (b.bytes_per_second) thr += (thr ? " · " : "") + fmt(b.bytes_per_second / 1e9, 2) + " GB/s";
+      tr.innerHTML = `<td><code>${b.name}</code></td><td class="num">${fmt(b.real_time, b.real_time < 10 ? 2 : 1)} ${b.time_unit}</td><td class="num">${thr || "—"}</td>`;
+      tb.appendChild(tr);
+    });
+  }
+
+  function describe(m) {
+    const parts = [`<b>${m.label}</b>`, m.cpu, `${m.num_cpus} logical CPUs`];
+    if (m.caches && m.caches.length) parts.push(m.caches.join(", "));
+    if (m.compiler) parts.push(m.compiler);
+    if (m.date) parts.push("run " + m.date.slice(0, 10));
+    return parts.join(" · ");
+  }
+
+  function render(data) {
+    document.getElementById("machine-desc").innerHTML = describe(data.machine);
+    drawScaling(data);
+    drawThroughput(data);
+    drawTable(data);
+  }
+
+  Promise.all(DATASETS.map((d) => fetch(d.file).then((r) => (r.ok ? r.json() : null)).catch(() => null))).then((results) => {
+    const loaded = results.map((data, i) => ({ ...DATASETS[i], data })).filter((d) => d.data);
+    const tabs = document.getElementById("machine-tabs");
+    if (!loaded.length) { document.getElementById("machine-desc").textContent = "Benchmark data not available."; return; }
+    loaded.forEach((d, i) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = d.data.machine.label;
+      b.setAttribute("aria-pressed", i === 0 ? "true" : "false");
+      b.addEventListener("click", () => {
+        tabs.querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", "false"));
+        b.setAttribute("aria-pressed", "true");
+        render(d.data);
+      });
+      tabs.appendChild(b);
+    });
+    render(loaded[0].data);
+  });
+})();
+</script>
+</body>
+</html>
