@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tickforge</title>
+<meta name="description" content="A C++20 tick research engine, running live in your browser via WebAssembly: columnar mmap store, arena memory, lock-free pipeline, realistic fills, work-stealing parallel sweeps, zero-copy Python, CUDA, Kubernetes. Learning project on synthetic data.">
+<meta name="theme-color" content="#0b0f19">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta property="og:title" content="tickforge: a C++20 tick research engine in your browser">
+<meta property="og:description" content="Backtest a million ticks in WebAssembly, render them with WebGL, sweep parameters live. Learning project, synthetic data.">
+<meta property="og:image" content="https://henryzhangpku.github.io/tickforge/assets/og.png">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #0b0f19; --bg-2: #0f1524; --surface: #131a2b; --surface-2: #182136; --rule: #24304a; --grid: #1c2639;
+  --ink: #eef2fb; --ink-2: #b5bfd3; --ink-3: #7c879d;
+  --accent: #5b9dff; --accent-2: #ffb347; --spark: #ff8a3d;
+  --series-1: #3987e5; --series-2: #d95926; --ideal: #7c879d;
+  --pos: #3987e5; --neg: #d95926; --neutral: #4a5161;
+  --band: rgba(91, 157, 255, 0.38); --mid: rgba(214, 224, 245, 0.85);
+  --code-bg: #0e1422; --glow: rgba(91, 157, 255, 0.16);
+  --shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f7f8fb; --bg-2: #eef1f7; --surface: #ffffff; --surface-2: #f3f5fa; --rule: #dde2ec; --grid: #e8ecf3;
+  --ink: #0d1424; --ink-2: #44506a; --ink-3: #7b8599;
+  --accent: #2a6fd6; --accent-2: #c9750a; --spark: #e8661b;
+  --series-1: #2a78d6; --series-2: #eb6834; --ideal: #8a8983;
+  --pos: #2a78d6; --neg: #eb6834; --neutral: #d9dce3;
+  --band: rgba(42, 120, 214, 0.28); --mid: rgba(13, 20, 36, 0.75);
+  --code-bg: #f0f3f8; --glow: rgba(42, 120, 214, 0.10);
+  --shadow: 0 10px 30px rgba(20, 30, 60, 0.08);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #f7f8fb; --bg-2: #eef1f7; --surface: #ffffff; --surface-2: #f3f5fa; --rule: #dde2ec; --grid: #e8ecf3;
+    --ink: #0d1424; --ink-2: #44506a; --ink-3: #7b8599;
+    --accent: #2a6fd6; --accent-2: #c9750a; --spark: #e8661b;
+    --series-1: #2a78d6; --series-2: #eb6834; --ideal: #8a8983;
+    --pos: #2a78d6; --neg: #eb6834; --neutral: #d9dce3;
+    --band: rgba(42, 120, 214, 0.28); --mid: rgba(13, 20, 36, 0.75);
+    --code-bg: #f0f3f8; --glow: rgba(42, 120, 214, 0.10);
+    --shadow: 0 10px 30px rgba(20, 30, 60, 0.08);
+  }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.6 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code, pre, .mono { font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace; }
+code { font-size: 0.86em; background: var(--code-bg); border: 1px solid var(--rule); padding: 1px 6px; border-radius: 6px; }
+pre { background: var(--code-bg); border: 1px solid var(--rule); padding: 16px 18px; border-radius: 12px; overflow-x: auto; font-size: 0.84rem; line-height: 1.55; }
+pre code { background: none; border: 0; padding: 0; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; }
+
+/* header */
+header.top {
+  position: sticky; top: 0; z-index: 20; backdrop-filter: saturate(1.4) blur(12px);
+  background: color-mix(in srgb, var(--bg) 78%, transparent); border-bottom: 1px solid var(--rule);
+}
+header.top .wrap { display: flex; align-items: center; gap: 20px; height: 60px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 800; letter-spacing: -0.02em; font-size: 1.15rem; }
+.brand:hover { text-decoration: none; }
+.brand img { width: 30px; height: 30px; }
+.brand span b { color: var(--spark); font-weight: 800; }
+nav.links { display: flex; gap: 18px; margin-left: auto; font-size: 0.92rem; }
+nav.links a { color: var(--ink-2); }
+nav.links a:hover { color: var(--ink); text-decoration: none; }
+.iconbtn {
+  border: 1px solid var(--rule); background: var(--surface); color: var(--ink-2); border-radius: 10px;
+  height: 34px; min-width: 34px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font: inherit; font-size: 0.85rem; padding: 0 10px;
+}
+.iconbtn:hover { color: var(--ink); border-color: var(--ink-3); }
+@media (max-width: 820px) { nav.links { display: none; } .theme-wrap { margin-left: auto; } }
+
+/* hero */
+.hero { position: relative; overflow: hidden; padding: 72px 0 40px; }
+.hero::before {
+  content: ""; position: absolute; inset: -40% -10% auto -10%; height: 520px;
+  background: radial-gradient(600px 300px at 20% 30%, var(--glow), transparent 70%),
+              radial-gradient(500px 260px at 85% 10%, color-mix(in srgb, var(--spark) 18%, transparent), transparent 70%);
+  pointer-events: none;
+}
+.eyebrow { display: inline-flex; gap: 8px; align-items: center; font-size: 0.8rem; color: var(--ink-2); border: 1px solid var(--rule); background: var(--surface); padding: 4px 12px; border-radius: 999px; }
+.eyebrow .dot { width: 7px; height: 7px; border-radius: 50%; background: #3ccf8e; box-shadow: 0 0 10px #3ccf8e; }
+.hero h1 { font-size: clamp(2.1rem, 5vw, 3.6rem); line-height: 1.05; letter-spacing: -0.035em; margin: 18px 0 14px; max-width: 900px; }
+.hero h1 .grad { background: linear-gradient(90deg, var(--accent), var(--spark)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero p.lede { font-size: 1.15rem; color: var(--ink-2); max-width: 760px; margin: 0 0 24px; }
+.cta { display: flex; gap: 12px; flex-wrap: wrap; }
+.btn {
+  display: inline-flex; align-items: center; gap: 8px; border-radius: 12px; padding: 10px 18px; font-weight: 600; font-size: 0.95rem;
+  border: 1px solid var(--rule); background: var(--surface); color: var(--ink); cursor: pointer; font-family: inherit;
+}
+.btn:hover { text-decoration: none; border-color: var(--ink-3); }
+.btn.primary { background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 70%, var(--spark))); color: #fff; border: 0; box-shadow: 0 6px 24px color-mix(in srgb, var(--accent) 35%, transparent); }
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 36px; }
+.kpi { background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; padding: 14px 16px; }
+.kpi .v { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.kpi .l { color: var(--ink-3); font-size: 0.8rem; }
+@media (max-width: 720px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+
+/* sections */
+section { padding: 56px 0 8px; }
+h2 { font-size: 1.8rem; letter-spacing: -0.025em; margin: 0 0 8px; }
+h3 { font-size: 1.05rem; margin: 22px 0 6px; }
+.sub { color: var(--ink-2); margin: 0 0 22px; max-width: 820px; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 16px; box-shadow: var(--shadow); }
+.notice { border: 1px dashed var(--rule); border-radius: 12px; padding: 10px 14px; color: var(--ink-2); font-size: 0.9rem; background: var(--bg-2); }
+
+/* demo */
+.demo { display: grid; grid-template-columns: 300px 1fr; gap: 0; overflow: hidden; }
+.controls { padding: 18px; border-right: 1px solid var(--rule); background: var(--surface-2); }
+.controls h4 { margin: 0 0 4px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); }
+.ctl { margin: 12px 0; }
+.ctl label { display: flex; justify-content: space-between; font-size: 0.86rem; color: var(--ink-2); margin-bottom: 4px; }
+.ctl label output { color: var(--ink); font-family: "JetBrains Mono", monospace; font-size: 0.82rem; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+select, input[type=number] {
+  width: 100%; background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 0.88rem;
+}
+.check { display: flex; gap: 8px; align-items: center; font-size: 0.86rem; color: var(--ink-2); margin: 12px 0; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.engine { margin-top: 14px; font-size: 0.8rem; color: var(--ink-3); line-height: 1.5; }
+.engine b { color: var(--ink-2); font-weight: 600; }
+.stage { padding: 16px 18px 18px; min-width: 0; }
+.tiles { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 12px; }
+.tile { background: var(--surface-2); border: 1px solid var(--rule); border-radius: 12px; padding: 8px 12px; min-width: 0; }
+.tile .v { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .l { color: var(--ink-3); font-size: 0.74rem; }
+.tile .v.pos { color: var(--pos); } .tile .v.neg { color: var(--neg); }
+.chartbox { position: relative; border: 1px solid var(--rule); border-radius: 12px; background: var(--bg-2); overflow: hidden; touch-action: none; }
+.chartbox canvas { display: block; width: 100%; }
+.chartbox .overlay { position: absolute; inset: 0; pointer-events: none; }
+#price-box { height: 320px; } #price-box canvas { height: 320px; }
+#equity-box { height: 120px; margin-top: 8px; } #equity-box canvas { height: 120px; }
+.chartbar { display: flex; align-items: center; gap: 12px; margin: 8px 0 0; font-size: 0.8rem; color: var(--ink-3); flex-wrap: wrap; }
+.chartbar .grow { flex: 1; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.8rem; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; background: var(--c); display: inline-block; }
+.sw.line { height: 2px; border-radius: 1px; }
+.tri-up { width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 10px solid var(--series-1); }
+.tri-dn { width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 10px solid var(--series-2); }
+.tip {
+  position: fixed; pointer-events: none; z-index: 50; display: none; background: var(--surface); color: var(--ink);
+  border: 1px solid var(--rule); border-radius: 10px; padding: 8px 10px; font-size: 0.8rem; box-shadow: var(--shadow); line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 960px) {
+  .demo { grid-template-columns: 1fr; }
+  .controls { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .tiles { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* heatmap */
+.sweep { display: grid; grid-template-columns: 1fr 260px; gap: 18px; padding: 18px; }
+.heat { display: grid; gap: 3px; }
+.heat .hdr { font-size: 0.74rem; color: var(--ink-3); display: flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
+.heat .hdr.rowh { justify-content: flex-end; padding-right: 6px; }
+.cell {
+  height: 38px; border-radius: 6px; border: 0; cursor: pointer; font: 600 0.72rem "JetBrains Mono", monospace;
+  background: var(--grid); color: var(--ink-3); transition: background 0.35s, transform 0.12s, box-shadow 0.12s; position: relative;
+}
+.cell:hover { transform: scale(1.06); z-index: 2; box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--ink-3); }
+.cell.sel { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent-2); z-index: 1; }
+.cell.pending { animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.45; } }
+.scale { height: 10px; border-radius: 5px; background: linear-gradient(90deg, var(--neg), var(--neutral), var(--pos)); margin: 6px 0 2px; }
+.scale-l { display: flex; justify-content: space-between; font-size: 0.74rem; color: var(--ink-3); }
+.side p { font-size: 0.88rem; color: var(--ink-2); margin: 0 0 10px; }
+.progress { height: 4px; border-radius: 2px; background: var(--grid); overflow: hidden; margin: 8px 0; }
+.progress i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--spark)); transition: width 0.15s; }
+@media (max-width: 860px) { .sweep { grid-template-columns: 1fr; } .cell { height: 30px; font-size: 0.62rem; } }
+
+/* feature grid */
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+.feat { padding: 18px; }
+.feat .k { font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--spark); font-weight: 700; }
+.feat h3 { margin: 6px 0 6px; font-size: 1.02rem; }
+.feat p { margin: 0 0 8px; color: var(--ink-2); font-size: 0.9rem; }
+.feat .proof { font-size: 0.8rem; color: var(--ink-3); }
+@media (max-width: 960px) { .grid3 { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 640px) { .grid3 { grid-template-columns: 1fr; } }
+
+/* benchmarks */
+.tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0; }
+.tabs button { font: inherit; font-size: 0.85rem; padding: 5px 14px; border-radius: 999px; cursor: pointer; border: 1px solid var(--rule); background: var(--surface); color: var(--ink-2); }
+.tabs button[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); background: color-mix(in srgb, var(--accent) 12%, var(--surface)); font-weight: 600; }
+.machine { font-size: 0.84rem; color: var(--ink-3); margin: 6px 0 14px; }
+.bench2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.figure { padding: 16px 18px; }
+.figure h3 { margin: 0 0 4px; }
+.figure svg { display: block; width: 100%; height: auto; }
+.caption { color: var(--ink-3); font-size: 0.82rem; margin: 6px 0 0; }
+.svgtext { fill: var(--ink-2); font: 12px Inter, ui-sans-serif, system-ui, sans-serif; }
+.svgtext.strong { fill: var(--ink); font-weight: 600; }
+table { border-collapse: collapse; width: 100%; font-size: 0.86rem; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--rule); }
+th { color: var(--ink-3); font-weight: 600; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td code { word-break: break-all; }
+details.all { margin-top: 14px; }
+details.all summary { cursor: pointer; color: var(--ink-2); font-size: 0.9rem; }
+@media (max-width: 860px) { .bench2 { grid-template-columns: 1fr; } }
+
+/* notes */
+.notes { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.note { padding: 18px 20px; }
+.note h3 { margin-top: 0; }
+.note p { color: var(--ink-2); font-size: 0.92rem; margin: 0 0 10px; }
+@media (max-width: 860px) { .notes { grid-template-columns: 1fr; } }
+footer { margin: 64px 0 0; padding: 26px 0 40px; border-top: 1px solid var(--rule); color: var(--ink-3); font-size: 0.86rem; }
+footer .wrap { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+footer img { width: 22px; height: 22px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#"><img src="assets/logo.svg" alt=""><span>tick<b>forge</b></span></a>
+    <nav class="links" aria-label="Sections">
+      <a href="#demo">Live demo</a><a href="#sweep">Sweep</a><a href="#inside">Inside</a><a href="#benchmarks">Benchmarks</a><a href="#notes">Design notes</a>
+      <a href="https://github.com/henryzhangpku/tickforge">GitHub ↗</a>
+    </nav>
+    <div class="theme-wrap"><button class="iconbtn" id="theme" type="button" aria-label="Toggle colour theme"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg></button></div>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <div class="wrap">
+      <span class="eyebrow"><span class="dot"></span><span id="engine-status">Loading the C++ engine (WebAssembly)…</span></span>
+      <h1>A C++20 tick research engine, <span class="grad">running in your browser.</span></h1>
+      <p class="lede">The same code that backtests from a memory-mapped column store on Linux is compiled to WebAssembly here. Move a slider and a million ticks are re-simulated on your CPU (quotes, latency, partial fills and all), then drawn by your GPU.</p>
+      <div class="cta">
+        <a class="btn primary" href="#demo">Try the live backtest ↓</a>
+        <a class="btn" href="https://github.com/henryzhangpku/tickforge">View source</a>
+        <a class="btn" href="https://colab.research.google.com/github/henryzhangpku/tickforge/blob/main/python/examples/gpu_colab.ipynb">Run the CUDA kernel on Colab</a>
+      </div>
+      <div class="kpis">
+        <div class="kpi"><div class="v" id="k-ticks">—</div><div class="l">ticks simulated per run</div></div>
+        <div class="kpi"><div class="v" id="k-wasm">—</div><div class="l">in your browser (WebAssembly)</div></div>
+        <div class="kpi"><div class="v" id="k-native">—</div><div class="l">native, one core (CI runner)</div></div>
+        <div class="kpi"><div class="v" id="k-stealing">—</div><div class="l">work stealing vs one queue, fine-grained tasks</div></div>
+      </div>
+    </div>
+  </div>
+
+  <section id="demo">
+    <div class="wrap">
+      <h2>Live backtest</h2>
+      <p class="sub">A deliberately simple mean-reversion toy on synthetic data: go short when the mid is rich to its rolling VWAP, long when it is cheap. Orders are market orders that cross the spread, wait out the latency, fill only up to the size displayed at the touch, and pay impact and fees.</p>
+      <div class="card demo">
+        <div class="controls">
+          <h4>Data</h4>
+          <div class="row2">
+            <div class="ctl"><label for="n">Ticks</label>
+              <select id="n"><option value="250000">250k</option><option value="500000">500k</option><option value="1000000" selected>1M</option><option value="2000000">2M</option></select></div>
+            <div class="ctl"><label for="seed">Seed</label><input id="seed" type="number" value="42" min="0" max="999999"></div>
+          </div>
+          <h4 style="margin-top:14px">Strategy</h4>
+          <div class="ctl"><label for="window">VWAP window <output id="o-window"></output></label><input id="window" type="range" min="50" max="3000" step="50" value="1000"></div>
+          <div class="ctl"><label for="entry">Entry |z| <output id="o-entry"></output></label><input id="entry" type="range" min="0.25" max="3" step="0.05" value="0.5"></div>
+          <div class="ctl"><label for="exit">Exit |z| <output id="o-exit"></output></label><input id="exit" type="range" min="0" max="1" step="0.05" value="0.25"></div>
+          <h4 style="margin-top:14px">Execution</h4>
+          <div class="ctl"><label for="latency">Latency <output id="o-latency"></output></label><input id="latency" type="range" min="0" max="500" step="5" value="0"></div>
+          <div class="ctl"><label for="impact">Impact, bp per lot <output id="o-impact"></output></label><input id="impact" type="range" min="0" max="5" step="0.1" value="0.1"></div>
+          <div class="ctl"><label for="fee">Fee per share <output id="o-fee"></output></label><input id="fee" type="range" min="0" max="0.01" step="0.0005" value="0.0005"></div>
+          <label class="check"><input id="touch" type="checkbox" checked> Partial fills at displayed size</label>
+          <div class="engine" id="engine-info">Engine: C++20 → WebAssembly (Emscripten), running in a Web Worker.</div>
+        </div>
+        <div class="stage">
+          <div class="tiles" aria-live="polite">
+            <div class="tile"><div class="v" id="t-pnl">—</div><div class="l">P&amp;L (net)</div></div>
+            <div class="tile" title="Annualised from the timestamps of about one synthetic session. The data is mean-reverting by construction, so this is far higher than anything real."><div class="v" id="t-sharpe">—</div><div class="l">Sharpe, annualised*</div></div>
+            <div class="tile"><div class="v" id="t-trades">—</div><div class="l">fills (partial)</div></div>
+            <div class="tile"><div class="v" id="t-cost">—</div><div class="l">spread + impact paid</div></div>
+            <div class="tile"><div class="v" id="t-dd">—</div><div class="l">max drawdown</div></div>
+            <div class="tile"><div class="v" id="t-speed">—</div><div class="l">engine time</div></div>
+          </div>
+          <div class="chartbox" id="price-box"><canvas id="price-gl" aria-label="Bid/ask band, mid price and fills, drawn with WebGL"></canvas><canvas class="overlay" id="price-ov"></canvas></div>
+          <div class="chartbox" id="equity-box"><canvas id="equity" aria-label="Equity curve"></canvas></div>
+          <div class="chartbar">
+            <div class="legend">
+              <span><i class="sw" style="--c: var(--band)"></i>bid–ask</span>
+              <span><i class="sw line" style="--c: var(--mid)"></i>mid</span>
+              <span><i class="tri-up"></i>buy fill</span>
+              <span><i class="tri-dn"></i>sell fill</span>
+              <span><i class="sw line" style="--c: var(--accent-2)"></i>equity</span>
+            </div>
+            <span class="grow"></span>
+            <span id="view-info"></span>
+            <button class="iconbtn" id="zoom-in" type="button" aria-label="Zoom in">＋</button>
+            <button class="iconbtn" id="zoom-out" type="button" aria-label="Zoom out">－</button>
+            <button class="iconbtn" id="zoom-reset" type="button">Reset</button>
+          </div>
+          <p class="caption">Scroll to zoom, drag to pan, double-click to reset. Every vertex is drawn on the GPU through WebGL2 (OpenGL ES 3.0); zoom around a fill to see it cross the spread. *The synthetic price is mean-reverting by construction, so Sharpe ratios here are absurdly high; read them relative to each other, not as a claim.</p>
+        </div>
+      </div>
+      <p class="notice" style="margin-top:14px">Learning project. The data is synthetic, generated from the seed in your browser; the toy strategy's results come from how that data was generated. Nothing here is investment advice.</p>
+    </div>
+  </section>
+
+  <section id="sweep">
+    <div class="wrap">
+      <h2>Parameter sweep, live</h2>
+      <p class="sub">Every cell is a full backtest over the same ticks, with the execution settings from the panel above. Cells fill in as the worker finishes them. Click one to load it into the backtest.</p>
+      <div class="card sweep">
+        <div><div class="heat" id="heat" role="grid" aria-label="Sharpe by VWAP window and entry threshold"></div></div>
+        <div class="side">
+          <p><b>Sharpe ratio</b> (annualised) by VWAP window (rows) and entry |z| (columns).</p>
+          <div class="scale"></div>
+          <div class="scale-l"><span id="sc-min">−</span><span>0</span><span id="sc-max">+</span></div>
+          <div class="progress"><i id="sweep-bar"></i></div>
+          <p id="sweep-status">Waiting for the engine…</p>
+          <button class="btn" id="sweep-run" type="button">Re-run sweep</button>
+          <p style="margin-top:14px">Natively, the same sweep runs on a work-stealing thread pool and is bit-identical at any thread count. In the browser it runs on one core: WebAssembly threads need cross-origin isolation headers that GitHub Pages cannot send.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="inside">
+    <div class="wrap">
+      <h2>What is inside</h2>
+      <p class="sub">Each piece exists to demonstrate one engineering concern, and each is backed by a test or a measurement rather than a claim.</p>
+      <div class="grid3">
+        <div class="card feat"><div class="k">C++ × Python</div><h3>Zero-copy NumPy, GIL released</h3><p><code>import tickforge</code> maps a file and hands back NumPy arrays that point into the mmap; sweep results move into NumPy through capsules.</p><div class="proof">python/tests: views share memory, outlive their store.</div></div>
+        <div class="card feat"><div class="k">Hardware / memory</div><h3>mmap column store, arenas</h3><p>Structure-of-arrays columns on 64-byte boundaries, <code>std::span</code> views, <code>MADV_SEQUENTIAL</code>; per-backtest <code>pmr</code> arenas.</p><div class="proof">test_no_alloc: zero <code>operator new</code> calls on the hot path.</div></div>
+        <div class="card feat"><div class="k">Design patterns</div><h3>CRTP hot path, virtual plugins</h3><p>Static dispatch where it is inlined per tick; a registry of runtime plugins behind <code>IStrategy</code> where flexibility matters.</p><div class="proof">Benchmarked: 3 virtual calls/tick cost 20–50%; 1 costs noise.</div></div>
+        <div class="card feat"><div class="k">Parallel / async</div><h3>Lock-free ring, work stealing</h3><p>SPSC ring with acquire/release and batched consume; a work-stealing pool beside a central-queue pool; futures throughout.</p><div class="proof">TSan in CI; sweeps bit-identical at 1–8 threads.</div></div>
+        <div class="card feat"><div class="k">GPU</div><h3>CUDA kernel + WebGL renderer</h3><p>One thread per symbol over time-major data so warps coalesce; CPU fallback. This page's chart is drawn by WebGL2 shaders.</p><div class="proof">CI builds with nvcc 12.6; Colab notebook runs it on a T4.</div></div>
+        <div class="card feat"><div class="k">Production &amp; cloud</div><h3>Sanitizers, containers, Kubernetes</h3><p>gcc/clang, ASan/UBSan, TSan, clang-tidy, Docker image on GHCR; sweeps shard over Kubernetes, Cloud Run or AWS Batch.</p><div class="proof">CI runs the sweep on a real cluster and diffs it with one machine.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="benchmarks">
+    <div class="wrap">
+      <h2>Benchmarks</h2>
+      <p class="sub">Google Benchmark, Release build, one million synthetic ticks read through <code>mmap</code>. Re-measured on a GitHub Actions runner for every push; the machine is named on each dataset. Shared cloud VMs are noisy, so read differences under ~10% as noise.</p>
+      <div class="tabs" id="machine-tabs" role="group" aria-label="Benchmark machine"></div>
+      <p class="machine" id="machine-desc">Loading benchmark data…</p>
+      <div class="bench2">
+        <div class="card figure">
+          <h3>Sweep scaling: 32 backtests × 1M ticks</h3>
+          <div class="legend"><span><i class="sw" style="--c: var(--series-1)"></i>measured speed-up</span><span><i class="sw line" style="--c: var(--ideal)"></i>ideal (linear)</span></div>
+          <svg id="chart-scaling" viewBox="0 0 560 260" role="img" aria-label="Speed-up of the parameter sweep versus thread count"></svg>
+          <p class="caption" id="scaling-caption"></p>
+        </div>
+        <div class="card figure">
+          <h3>Throughput by component</h3>
+          <div class="legend"><span><i class="sw" style="--c: var(--series-1)"></i>default path</span><span><i class="sw" style="--c: var(--series-2)"></i>alternative</span></div>
+          <svg id="chart-throughput" viewBox="0 0 560 360" role="img" aria-label="Throughput of each component"></svg>
+          <p class="caption">Million items per second; higher is better.</p>
+        </div>
+      </div>
+      <details class="all card figure"><summary>All results</summary>
+        <table id="bench-table"><thead><tr><th>Benchmark</th><th class="num">Time</th><th class="num">Throughput</th></tr></thead><tbody></tbody></table>
+      </details>
+    </div>
+  </section>
+
+  <section id="architecture">
+    <div class="wrap">
+      <h2>Architecture</h2>
+      <div class="card figure">
+        <svg viewBox="0 0 960 400" role="img" aria-labelledby="arch-title">
+          <title id="arch-title">Synthetic data or CSV imports become a columnar file that is memory-mapped as spans. The backtester consumes it directly or through an SPSC ring; sweeps fan out over a thread pool and across shards on Kubernetes; Python, the browser (WebAssembly) and CUDA sit on the same core.</title>
+          <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink-3)"/></marker></defs>
+          <g fill="var(--surface-2)" stroke="var(--rule)" stroke-width="1.2">
+            <rect x="10" y="20" width="190" height="64" rx="10"/><rect x="250" y="20" width="210" height="64" rx="10"/><rect x="510" y="20" width="200" height="64" rx="10"/><rect x="760" y="20" width="190" height="64" rx="10"/>
+            <rect x="10" y="160" width="290" height="84" rx="10"/><rect x="335" y="160" width="290" height="84" rx="10"/><rect x="660" y="160" width="290" height="84" rx="10"/>
+            <rect x="10" y="300" width="290" height="80" rx="10"/><rect x="335" y="300" width="290" height="80" rx="10"/><rect x="660" y="300" width="290" height="80" rx="10"/>
+          </g>
+          <g class="svgtext" text-anchor="middle">
+            <text x="105" y="47" class="svgtext strong">Synthetic or CSV</text><text x="105" y="67">trades + quote in force</text>
+            <text x="355" y="47" class="svgtext strong">Columnar tick file</text><text x="355" y="67">8 SoA columns, 64 B aligned</text>
+            <text x="610" y="47" class="svgtext strong">MappedTickFile</text><text x="610" y="67">mmap → std::span, zero copy</text>
+            <text x="855" y="47" class="svgtext strong">Universe</text><text x="855" y="67">one file per symbol</text>
+            <text x="155" y="188" class="svgtext strong">Backtester (CRTP)</text><text x="155" y="208">features → strategy → fills at the quote</text><text x="155" y="228">latency · partial fills · impact · fees</text>
+            <text x="480" y="188" class="svgtext strong">Pipelined replay</text><text x="480" y="208">producer → SpscRing → consumer</text><text x="480" y="228">acquire/release, batched consume</text>
+            <text x="805" y="188" class="svgtext strong">Sweeps</text><text x="805" y="208">work-stealing pool, one arena per task</text><text x="805" y="228">shard i mod N → K8s / Cloud Run / Batch</text>
+            <text x="155" y="328" class="svgtext strong">Python (pybind11)</text><text x="155" y="350">NumPy views over mmap, GIL released</text>
+            <text x="480" y="328" class="svgtext strong">Browser (WebAssembly)</text><text x="480" y="350">engine in a Web Worker, WebGL2 chart</text>
+            <text x="805" y="328" class="svgtext strong">GPU (CUDA)</text><text x="805" y="350">batch features, coalesced, CPU fallback</text>
+          </g>
+          <g stroke="var(--ink-3)" stroke-width="1.5" fill="none" marker-end="url(#arrow)">
+            <path d="M200 52 H246"/><path d="M460 52 H506"/><path d="M710 52 H756"/>
+            <path d="M560 84 L190 156"/><path d="M610 84 L480 156"/><path d="M855 84 L820 156"/>
+            <path d="M155 244 V296"/><path d="M300 202 C320 260 420 260 460 296"/><path d="M805 244 V296"/>
+          </g>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <section id="notes">
+    <div class="wrap">
+      <h2>Design notes</h2>
+      <div class="notes">
+        <div class="card note"><h3>Columnar file + mmap</h3><p>Trades and the quote in force are stored as eight structure-of-arrays columns, each on a 64-byte boundary. Opening a file is one <code>mmap</code>; columns are <code>std::span&lt;const T&gt;</code> into the mapping, with no parse step and no copy, and the page cache is shared across processes. A study that needs only prices touches only price pages.</p></div>
+        <div class="card note"><h3>No allocation on the hot path</h3><p>Each backtest's rolling buffers come from a <code>pmr::monotonic_buffer_resource</code> sized up front. A test binary replaces global <code>operator new</code> and asserts zero calls while 200,000 ticks flow through; the arena's upstream is <code>null_memory_resource()</code>, so overflow throws instead of quietly calling <code>malloc</code>.</p></div>
+        <div class="card note"><h3>The SPSC ring</h3><p>The producer publishes a slot with a release store of <code>tail</code>; the consumer's acquire load makes it visible; the mirror pair on <code>head</code> stops overwrites. Indices sit on separate cache lines and each side caches the other's. Popping one item per release store ran at a third of direct speed (a cache line bouncing per tick); consuming in batches made the pipeline level with direct replay.</p></div>
+        <div class="card note"><h3>CRTP vs virtual, measured</h3><p>Three tiny virtual feature updates per tick cost 20–50%: each blocks inlining of a few instructions. One virtual strategy call per tick is within noise: the indirect branch always goes to the same place and the tick's work is dominated by a <code>log</code>. Keep tiny, frequent operations static; put plugin boundaries around coarse work.</p></div>
+        <div class="card note"><h3>Fills you can argue with</h3><p>Orders become eligible after the latency and never on the tick that triggered them. Buys pay the ask, sells hit the bid, plus linear impact; with partial fills on, an order takes only the displayed size and works the rest on later ticks. P&amp;L is marked at mid, so the spread you pay shows up immediately. The same toy that looks great with fills at the last trade loses money at high turnover once it pays the spread.</p></div>
+        <div class="card note"><h3>Work stealing, when it pays</h3><p>The central pool is one mutex-guarded queue; the work-stealing pool gives each worker a deque (LIFO for its own work, FIFO when stealing). For a sweep of whole backtests the two tie. For a fork-join tree of microsecond tasks, work stealing is about twice as fast because children land on the spawning worker's deque instead of one contended lock.</p></div>
+        <div class="card note"><h3>Determinism and sharding</h3><p>Every backtest is single-threaded over immutable data and writes only its own result slot, so a sweep is bit-identical at any thread count, pool type or shard split. Task <i>i</i> belongs to shard <i>i</i> mod <i>N</i>; the shard index comes from Kubernetes, Cloud Run or AWS Batch variables. CI runs the sweep as a Kubernetes Indexed Job and byte-compares the merged output with a single machine.</p></div>
+        <div class="card note"><h3>GPU: the CUDA mental model</h3><p>Batch features run one thread per symbol over time-major data, so a warp's 32 threads read 32 adjacent doubles: a coalesced load, the first rule of GPU bandwidth. Running sums live in registers; nothing is reused across threads, so shared memory would not help. The kernel is bandwidth-bound and wins only with thousands of symbols resident on the device; small batches are dominated by PCIe copies.</p></div>
+      </div>
+      <h3 style="margin-top:28px">From Python</h3>
+<pre><code>import tickforge
+tickforge.generate("ticks.tf", n_ticks=2_000_000, seed=42)
+store = tickforge.TickStore("ticks.tf")            # mmap; store.bid, store.ask, ... are NumPy views
+res = tickforge.sweep(store, windows=[500, 1000], entry_z=[0.5, 1.0], exit_z=[0.25],
+                      latency_ns=5_000_000, impact_bps_per_lot=0.5)
+res["sharpe_annual"].argmax()                       # NumPy arrays, one row per grid point</code></pre>
+      <h3>Limitations</h3>
+      <ul style="color: var(--ink-2); font-size: 0.92rem">
+        <li>Synthetic data by default (bring your own with the CSV importer); trades plus top-of-book only, no full order book or queue position.</li>
+        <li>Impact is a linear temporary model; there is no permanent impact or adverse selection.</li>
+        <li>Annualised Sharpe from about a day of synthetic data is mostly a reminder of how noisy annualising is.</li>
+        <li>The CUDA kernel is compiled in CI but executed only where a GPU exists (the Colab notebook); GitHub's free runners have none.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <img src="assets/logo.svg" alt="">
+    <span>tickforge · learning project · synthetic data · not investment advice · MIT</span>
+    <span style="margin-left:auto"><a href="https://github.com/henryzhangpku/tickforge">github.com/henryzhangpku/tickforge</a></span>
+  </div>
+</footer>
+<div class="tip" id="tip" role="tooltip"></div>
+<script src="assets/app.js"></script>
+</body>
+</html>

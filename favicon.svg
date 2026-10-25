@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="tickforge">
+  <defs>
+    <linearGradient id="tf-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1d2a44"/>
+      <stop offset="1" stop-color="#0b0f19"/>
+    </linearGradient>
+    <linearGradient id="tf-line" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0" stop-color="#7fb2ff"/>
+      <stop offset="1" stop-color="#ffffff"/>
+    </linearGradient>
+    <radialGradient id="tf-glow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffb347" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#ff7a18" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#tf-bg)"/>
+  <!-- anvil base -->
+  <path d="M14 50h36l-4-5H18z" fill="#2c3b5c"/>
+  <!-- a stepped tick tape climbing to the spark -->
+  <path d="M12 40h7v-5h6v4h6v-9h6v3h6v-9h5" fill="none" stroke="url(#tf-line)" stroke-width="3.6"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- the spark -->
+  <circle cx="49" cy="20" r="10" fill="url(#tf-glow)"/>
+  <path d="M49 11.5l1.9 6.6 6.6 1.9-6.6 1.9-1.9 6.6-1.9-6.6-6.6-1.9 6.6-1.9z" fill="#ffd27a"/>
+</svg>

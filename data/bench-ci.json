@@ -1,0 +1,172 @@
+{
+ "machine": {
+  "label": "GitHub Actions ubuntu-24.04 runner",
+  "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+  "num_cpus": 4,
+  "mhz_per_cpu": 2994,
+  "caches": [
+   "L1 data 48 KiB x2",
+   "L1 instruction 32 KiB x2",
+   "L2 unified 2048 KiB x2",
+   "L3 unified 266240 KiB x4"
+  ],
+  "build_type": "release",
+  "compiler": "g++-13 (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "commit": "c1480f49452426ffc541dfcee26292a268bacbf9",
+  "date": "2026-10-25T16:54:07+00:00"
+ },
+ "benchmarks": [
+  {
+   "name": "BM_MmapScanPrices",
+   "real_time": 656.7869726415262,
+   "cpu_time": 656.6806415094339,
+   "time_unit": "us",
+   "items_per_second": 1522810231.9285953,
+   "bytes_per_second": 12182481855.428762
+  },
+  {
+   "name": "BM_ScratchNewDelete",
+   "real_time": 134.6221941558488,
+   "cpu_time": 134.58319452382406,
+   "time_unit": "ns",
+   "items_per_second": null,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_ScratchArena",
+   "real_time": 90.44866862429589,
+   "cpu_time": 90.44208624537785,
+   "time_unit": "ns",
+   "items_per_second": null,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_SpscRingTransfer/real_time",
+   "real_time": 51.556609200000025,
+   "cpu_time": 51.52845740000002,
+   "time_unit": "ms",
+   "items_per_second": 20338342.964571834,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_FeaturesCrtp",
+   "real_time": 13.02004366666699,
+   "cpu_time": 13.018453611111116,
+   "time_unit": "ms",
+   "items_per_second": 76814038.73855726,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_FeaturesVirtual",
+   "real_time": 18.066182564102572,
+   "cpu_time": 18.06479912820513,
+   "time_unit": "ms",
+   "items_per_second": 55356275.644309215,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_BacktestCrtp",
+   "real_time": 24.16054806896529,
+   "cpu_time": 24.158774758620716,
+   "time_unit": "ms",
+   "items_per_second": 41392827.65750214,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_BacktestVirtual",
+   "real_time": 24.707294379310426,
+   "cpu_time": 24.706465344827585,
+   "time_unit": "ms",
+   "items_per_second": 40475235.37029771,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_BacktestPipelined/real_time",
+   "real_time": 23.805516733333814,
+   "cpu_time": 23.804995033333338,
+   "time_unit": "ms",
+   "items_per_second": 42007069.67220519,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_Sweep/threads:1/real_time",
+   "real_time": 761.0103539999784,
+   "cpu_time": 0.09586599999966694,
+   "time_unit": "ms",
+   "items_per_second": 42049362.1825294,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_Sweep/threads:2/real_time",
+   "real_time": 384.9776225000028,
+   "cpu_time": 0.1703564999999685,
+   "time_unit": "ms",
+   "items_per_second": 83121714.43159601,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_Sweep/threads:3/real_time",
+   "real_time": 370.0600285000064,
+   "cpu_time": 0.27156399999972436,
+   "time_unit": "ms",
+   "items_per_second": 86472457.2651311,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_Sweep/threads:4/real_time",
+   "real_time": 347.0768984999921,
+   "cpu_time": 0.25844649999973157,
+   "time_unit": "ms",
+   "items_per_second": 92198588.0889757,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_PoolTreeCentral/threads:4/real_time",
+   "real_time": 19.214280405404875,
+   "cpu_time": 0.01723997297295218,
+   "time_unit": "ms",
+   "items_per_second": 1705398.240715928,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_PoolTreeStealing/threads:4/real_time",
+   "real_time": 8.119076022988262,
+   "cpu_time": 0.12193452873562978,
+   "time_unit": "ms",
+   "items_per_second": 4035927.2295543295,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_SweepCentral/real_time",
+   "real_time": 342.7110550000094,
+   "cpu_time": 0.41501049999981277,
+   "time_unit": "ms",
+   "items_per_second": 93373118.6465494,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_BatchFeaturesCpu/symbols:64",
+   "real_time": 1.884284276881759,
+   "cpu_time": 1.8842296854838716,
+   "time_unit": "ms",
+   "items_per_second": 139125289.24661392,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_BatchFeaturesCpu/symbols:512",
+   "real_time": 21.419507406250204,
+   "cpu_time": 21.418104843750008,
+   "time_unit": "ms",
+   "items_per_second": 97914918.95754574,
+   "bytes_per_second": null
+  },
+  {
+   "name": "BM_BatchFeaturesCpu/symbols:4096",
+   "real_time": 127.95168480000143,
+   "cpu_time": 127.94514380000024,
+   "time_unit": "ms",
+   "items_per_second": 131128196.83274269,
+   "bytes_per_second": null
+  }
+ ]
+}
